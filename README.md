@@ -1,4 +1,8 @@
-TableSample_Postgres
-====================
+mockSeqScan
+===========
+mockSeqScan to investigate the SeqScan mechanism
 
-tablesample query implementation for postsgres
+
+
+It was inspired from later indexonly scan commit in Postgres Github. 
+Test tried out with a mock on seq scan.
