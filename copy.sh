@@ -18,3 +18,4 @@ cp ./pathnode.h ../postgres/src/include/optimizer/
 cp ./cost.h ../postgres/src/include/optimizer/
 cp ./costsize.c ../postgres/src/backend/optimizer/path/
 cp ./allpaths.c ../postgres/src/backend/optimizer/path/
+cp ./gram.y ../postgres/src/backend/parser/

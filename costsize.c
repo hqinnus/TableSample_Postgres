@@ -103,7 +103,7 @@ int			effective_cache_size = DEFAULT_EFFECTIVE_CACHE_SIZE;
 Cost		disable_cost = 1.0e10;
 
 bool		enable_seqscan = true;
-bool		enable_mockseqscan = true;
+bool		enable_samplescan = true;
 bool		enable_indexscan = true;
 bool		enable_indexonlyscan = true;
 bool		enable_bitmapscan = true;
@@ -217,14 +217,14 @@ cost_seqscan(Path *path, PlannerInfo *root,
 
 
 /*
- * cost_mockseqscan
- *	  Determines and returns the cost of scanning a relation mocking-sequentially.
+ * cost_samplescan
+ *	  Determines and returns the cost of scanning a relation according to sample scan.
  *
  * 'baserel' is the relation to be scanned
  * 'param_info' is the ParamPathInfo if this is a parameterized path, else NULL
  */
 void
-cost_mockseqscan(Path *path, PlannerInfo *root,
+cost_samplescan(Path *path, PlannerInfo *root,
 			 RelOptInfo *baserel, ParamPathInfo *param_info)
 {
 	Cost		startup_cost = 0;
@@ -243,7 +243,7 @@ cost_mockseqscan(Path *path, PlannerInfo *root,
 	else
 		path->rows = baserel->rows;
 
-	if (!enable_mockseqscan)
+	if (!enable_samplescan)
 		startup_cost += disable_cost;
 
 	/* fetch estimated page cost for tablespace containing table */

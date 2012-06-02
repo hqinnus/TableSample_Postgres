@@ -1191,10 +1191,10 @@ typedef ScanState SeqScanState;
 
 
 /*
- * MockSeqScan uses a bare ScanState as its state node, since it needs
+ * SampleScan uses a bare ScanState as its state node, since it needs
  * no additional fields.
  */
-typedef ScanState MockSeqScanState;
+typedef ScanState SampleScanState;
 
 
 /*

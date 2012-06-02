@@ -437,9 +437,9 @@ _outSeqScan(StringInfo str, const SeqScan *node)
 }
 
 static void
-_outMockSeqScan(StringInfo str, const MockSeqScan *node)
+_outSampleScan(StringInfo str, const SampleScan *node)
 {
-	WRITE_NODE_TYPE("MOCKSEQSCAN");
+	WRITE_NODE_TYPE("SAMPLESCAN");
 
 	_outScanInfo(str, (const Scan *) node);
 }
@@ -2742,8 +2742,8 @@ _outNode(StringInfo str, const void *obj)
 			case T_SeqScan:
 				_outSeqScan(str, obj);
 				break;
-			case T_MockSeqScan:
-				_outMockSeqScan(str, obj);
+			case T_SampleScan:
+				_outSampleScan(str, obj);
 				break;
 			case T_IndexScan:
 				_outIndexScan(str, obj);

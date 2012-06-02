@@ -271,10 +271,10 @@ typedef struct Scan
 typedef Scan SeqScan;
 
 /* ----------------
- *		mock sequential scan node
+ *		sample scan node
  * ----------------
  */
-typedef Scan MockSeqScan;
+typedef Scan SampleScan;
 
 /* ----------------
  *		index scan node

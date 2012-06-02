@@ -744,22 +744,22 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer)
 
 
 /*
- * create_mockseqscan_path
- *	  Creates a path corresponding to a mock sequential scan, returning the
+ * create_samplescan_path
+ *	  Creates a path corresponding to a sample scan, returning the
  *	  pathnode.
  */
 Path *
-create_mockseqscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer)
+create_samplescan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer)
 {
 	Path	   *pathnode = makeNode(Path);
 
-	pathnode->pathtype = T_MockSeqScan;
+	pathnode->pathtype = T_SampleScan;
 	pathnode->parent = rel;
 	pathnode->param_info = get_baserel_parampathinfo(root, rel,
 													 required_outer);
 	pathnode->pathkeys = NIL;	/* seqscan has unordered result */
 
-	cost_mockseqscan(pathnode, root, rel, pathnode->param_info);
+	cost_samplescan(pathnode, root, rel, pathnode->param_info);
 
 	return pathnode;
 }
@@ -1654,7 +1654,7 @@ distinct_col_search(int colno, List *colnos, List *opids)
  * create_subqueryscan_path
  *	  Creates a path corresponding to a sequential scan of a subquery,
  *	  returning the pathnode.
- *	  There is a possibility to modify this to Mock Seq Scan, but not sure.
+ *	  There is a possibility to modify this to Sequential Scan, but not sure.
  */
 Path *
 create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel,
@@ -1677,7 +1677,7 @@ create_subqueryscan_path(PlannerInfo *root, RelOptInfo *rel,
  * create_functionscan_path
  *	  Creates a path corresponding to a sequential scan of a function,
  *	  returning the pathnode.
- *	  POSSIBLE for Mock Seq Scan
+ *	  POSSIBLE for Sequential Scan
  */
 Path *
 create_functionscan_path(PlannerInfo *root, RelOptInfo *rel)
@@ -2081,8 +2081,8 @@ reparameterize_path(PlannerInfo *root, Path *path,
 	{
 		case T_SeqScan:
 			return create_seqscan_path(root, rel, required_outer);
-		case T_MockSeqScan:
-			return create_mockseqscan_path(root, rel, required_outer);
+		case T_SampleScan:
+			return create_samplescan_path(root, rel, required_outer);
 		case T_IndexScan:
 		case T_IndexOnlyScan:
 		{

@@ -101,7 +101,7 @@
 #include "executor/nodeRecursiveunion.h"
 #include "executor/nodeResult.h"
 #include "executor/nodeSeqscan.h"
-#include "executor/nodeMockSeqscan.h"
+#include "executor/nodeSamplescan.h"
 #include "executor/nodeSetOp.h"
 #include "executor/nodeSort.h"
 #include "executor/nodeSubplan.h"
@@ -189,8 +189,8 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 												   estate, eflags);
 			break;
 
-		case T_MockSeqScan:
-			result = (PlanState *) ExecInitMockSeqScan((MockSeqScan *) node,
+		case T_SampleScan:
+			result = (PlanState *) ExecInitSampleScan((SampleScan *) node,
 													   estate, eflags);
 			break;
 
@@ -405,8 +405,8 @@ ExecProcNode(PlanState *node)
 			result = ExecSeqScan((SeqScanState *) node);
 			break;
 
-		case T_MockSeqScanState:
-			result = ExecMockSeqScan((MockSeqScanState *) node);
+		case T_SampleScanState:
+			result = ExecSampleScan((SampleScanState *) node);
 			break;
 
 		case T_IndexScanState:
@@ -643,8 +643,8 @@ ExecEndNode(PlanState *node)
 			ExecEndSeqScan((SeqScanState *) node);
 			break;
 
-		case T_MockSeqScanState:
-			ExecEndMockSeqScan((MockSeqScanState *) node);
+		case T_SampleScanState:
+			ExecEndSampleScan((SampleScanState *) node);
 			break;
 
 		case T_IndexScanState:

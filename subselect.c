@@ -2081,7 +2081,7 @@ finalize_plan(PlannerInfo *root, Plan *plan, Bitmapset *valid_params,
 			context.paramids = bms_add_members(context.paramids, scan_params);
 			break;
 
-		case T_MockSeqScan:
+		case T_SampleScan:
 			context.paramids = bms_add_members(context.paramids, scan_params);
 			break;
 

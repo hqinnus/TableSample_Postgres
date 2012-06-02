@@ -1,36 +1,36 @@
 /*-------------------------------------------------------------------------
  *
- * nodeMockSeqscan.c
- *	  Support routines for sequential scans of relations.
+ * nodeSamplescan.c
+ *	  Support routines for sample scans of relations.
  *
  * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
  * IDENTIFICATION
- *	  src/backend/executor/nodeMockSeqscan.c
+ *	  src/backend/executor/nodeSamplescan.c
  *
  *-------------------------------------------------------------------------
  */
 /*
  * INTERFACE ROUTINES
- *		ExecMockSeqScan				sequentially scans a relation.
- *		ExecMockSeqNext				retrieve next tuple in sequential order.
- *		ExecInitMockSeqScan			creates and initializes a seqscan node.
- *		ExecEndMockSeqScan			releases any storage allocated.
- *		ExecReScanMockSeqScan		rescans the relation
- *		ExecMockSeqMarkPos			marks scan position
- *		ExecMockSeqRestrPos			restores scan position
+ *		ExecSampleScan				sequentially scans a relation.
+ *		ExecSampleNext				retrieve next tuple in sequential order.
+ *		ExecInitSampleScan			creates and initializes a seqscan node.
+ *		ExecEndSampleScan			releases any storage allocated.
+ *		ExecReScanSampleScan		rescans the relation
+ *		ExecSampleMarkPos			marks scan position
+ *		ExecSampleRestrPos			restores scan position
  */
 #include "postgres.h"
 
 #include "access/relscan.h"
 #include "executor/execdebug.h"
-#include "executor/nodeMockSeqscan.h"
+#include "executor/nodeSamplescan.h"
 #include "utils/rel.h"
 
-static void InitScanRelation(MockSeqScanState *node, EState *estate);
-static TupleTableSlot *MockSeqNext(MockSeqScanState *node);
+static void InitScanRelation(SampleScanState *node, EState *estate);
+static TupleTableSlot *SampleNext(SampleScanState *node);
 
 /* ----------------------------------------------------------------
  *						Scan Support
@@ -38,13 +38,13 @@ static TupleTableSlot *MockSeqNext(MockSeqScanState *node);
  */
 
 /* ----------------------------------------------------------------
- *		MockSeqNext
+ *		SampleNext
  *
- *		This is a workhorse for ExecMockSeqScan
+ *		This is a workhorse for ExecSampleScan
  * ----------------------------------------------------------------
  */
 static TupleTableSlot *
-MockSeqNext(MockSeqScanState *node)
+SampleNext(SampleScanState *node)
 {
 	HeapTuple	tuple;
 	HeapScanDesc scandesc;
@@ -86,20 +86,20 @@ MockSeqNext(MockSeqScanState *node)
 }
 
 /*
- * MockSeqRecheck -- access method routine to recheck a tuple in EvalPlanQual
+ * SampleRecheck -- access method routine to recheck a tuple in EvalPlanQual
  */
 static bool
-MockSeqRecheck(MockSeqScanState *node, TupleTableSlot *slot)
+SampleRecheck(SampleScanState *node, TupleTableSlot *slot)
 {
 	/*
-	 * Note that unlike IndexScan, MockSeqScan never use keys in heap_beginscan
+	 * Note that unlike IndexScan, SampleScan never use keys in heap_beginscan
 	 * (and this is very bad) - so, here we do not check are keys ok or not.
 	 */
 	return true;
 }
 
 /* ----------------------------------------------------------------
- *		ExecMockSeqScan(node)
+ *		ExecSampleScan(node)
  *
  *		Scans the relation sequentially and returns the next qualifying
  *		tuple.
@@ -108,11 +108,11 @@ MockSeqRecheck(MockSeqScanState *node, TupleTableSlot *slot)
  * ----------------------------------------------------------------
  */
 TupleTableSlot *
-ExecMockSeqScan(MockSeqScanState *node)
+ExecSampleScan(SampleScanState *node)
 {
 	return ExecScan((ScanState *) node,
-					(ExecScanAccessMtd) MockSeqNext,
-					(ExecScanRecheckMtd) MockSeqRecheck);
+					(ExecScanAccessMtd) SampleNext,
+					(ExecScanRecheckMtd) SampleRecheck);
 }
 
 /* ----------------------------------------------------------------
@@ -123,7 +123,7 @@ ExecMockSeqScan(MockSeqScanState *node)
  * ----------------------------------------------------------------
  */
 static void
-InitScanRelation(MockSeqScanState *node, EState *estate)
+InitScanRelation(SampleScanState *node, EState *estate)
 {
 	Relation	currentRelation;
 	HeapScanDesc currentScanDesc;
@@ -133,7 +133,7 @@ InitScanRelation(MockSeqScanState *node, EState *estate)
 	 * open that relation and acquire appropriate lock on it.
 	 */
 	currentRelation = ExecOpenScanRelation(estate,
-									 ((MockSeqScan *) node->ps.plan)->scanrelid);
+									 ((SampleScan *) node->ps.plan)->scanrelid);
 
 	currentScanDesc = heap_beginscan(currentRelation,
 									 estate->es_snapshot,
@@ -148,16 +148,16 @@ InitScanRelation(MockSeqScanState *node, EState *estate)
 
 
 /* ----------------------------------------------------------------
- *		ExecInitMockSeqScan
+ *		ExecInitSampleScan
  * ----------------------------------------------------------------
  */
-MockSeqScanState *
-ExecInitMockSeqScan(MockSeqScan *node, EState *estate, int eflags)
+SampleScanState *
+ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 {
-	MockSeqScanState *scanstate;
+	SampleScanState *scanstate;
 
 	/*
-	 * Once upon a time it was possible to have an outerPlan of a MockSeqScan, but
+	 * Once upon a time it was possible to have an outerPlan of a SampleScan, but
 	 * not any more.
 	 */
 	Assert(outerPlan(node) == NULL);
@@ -166,7 +166,7 @@ ExecInitMockSeqScan(MockSeqScan *node, EState *estate, int eflags)
 	/*
 	 * create state structure
 	 */
-	scanstate = makeNode(MockSeqScanState);
+	scanstate = makeNode(SampleScanState);
 	scanstate->ps.plan = (Plan *) node;
 	scanstate->ps.state = estate;
 
@@ -210,13 +210,13 @@ ExecInitMockSeqScan(MockSeqScan *node, EState *estate, int eflags)
 }
 
 /* ----------------------------------------------------------------
- *		ExecEndMockSeqScan
+ *		ExecEndSampleScan
  *
  *		frees any storage allocated through C routines.
  * ----------------------------------------------------------------
  */
 void
-ExecEndMockSeqScan(MockSeqScanState *node)
+ExecEndSampleScan(SampleScanState *node)
 {
 	Relation	relation;
 	HeapScanDesc scanDesc;
@@ -255,13 +255,13 @@ ExecEndMockSeqScan(MockSeqScanState *node)
  */
 
 /* ----------------------------------------------------------------
- *		ExecReScanMockSeqScan
+ *		ExecReScanSampleScan
  *
  *		Rescans the relation.
  * ----------------------------------------------------------------
  */
 void
-ExecReScanMockSeqScan(MockSeqScanState *node)
+ExecReScanSampleScan(SampleScanState *node)
 {
 	HeapScanDesc scan;
 
@@ -274,13 +274,13 @@ ExecReScanMockSeqScan(MockSeqScanState *node)
 }
 
 /* ----------------------------------------------------------------
- *		ExecMockSeqMarkPos(node)
+ *		ExecSampleMarkPos(node)
  *
  *		Marks scan position.
  * ----------------------------------------------------------------
  */
 void
-ExecMockSeqMarkPos(MockSeqScanState *node)
+ExecSampleMarkPos(SampleScanState *node)
 {
 	HeapScanDesc scan = node->ss_currentScanDesc;
 
@@ -288,13 +288,13 @@ ExecMockSeqMarkPos(MockSeqScanState *node)
 }
 
 /* ----------------------------------------------------------------
- *		ExecMockSeqRestrPos
+ *		ExecSampleRestrPos
  *
  *		Restores scan position.
  * ----------------------------------------------------------------
  */
 void
-ExecMockSeqRestrPos(MockSeqScanState *node)
+ExecSampleRestrPos(SampleScanState *node)
 {
 	HeapScanDesc scan = node->ss_currentScanDesc;
 

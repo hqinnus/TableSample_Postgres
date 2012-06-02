@@ -38,7 +38,7 @@
 #include "executor/nodeRecursiveunion.h"
 #include "executor/nodeResult.h"
 #include "executor/nodeSeqscan.h"
-#include "executor/nodeMockSeqscan.h"
+#include "executor/nodeSamplescan.h"
 #include "executor/nodeSetOp.h"
 #include "executor/nodeSort.h"
 #include "executor/nodeSubplan.h"
@@ -153,8 +153,8 @@ ExecReScan(PlanState *node)
 			ExecReScanSeqScan((SeqScanState *) node);
 			break;
 
-		case T_MockSeqScanState:
-			ExecReScanMockSeqScan((MockSeqScanState *) node);
+		case T_SampleScanState:
+			ExecReScanSampleScan((SampleScanState *) node);
 			break;
 
 		case T_IndexScanState:
@@ -279,8 +279,8 @@ ExecMarkPos(PlanState *node)
 			ExecSeqMarkPos((SeqScanState *) node);
 			break;
 
-		case T_MockSeqScanState:
-			ExecMockSeqMarkPos((MockSeqScanState *) node);
+		case T_SampleScanState:
+			ExecSampleMarkPos((SampleScanState *) node);
 			break;
 
 		case T_IndexScanState:
@@ -340,8 +340,8 @@ ExecRestrPos(PlanState *node)
 			ExecSeqRestrPos((SeqScanState *) node);
 			break;
 
-		case T_MockSeqScanState:
-			ExecMockSeqRestrPos((MockSeqScanState *) node);
+		case T_SampleScanState:
+			ExecSampleRestrPos((SampleScanState *) node);
 			break;
 
 		case T_IndexScanState:
@@ -396,7 +396,7 @@ ExecSupportsMarkRestore(NodeTag plantype)
 	switch (plantype)
 	{
 		case T_SeqScan:
-		case T_MockSeqScan:
+		case T_SampleScan:
 		case T_IndexScan:
 		case T_IndexOnlyScan:
 		case T_TidScan:
@@ -460,7 +460,7 @@ ExecSupportsBackwardScan(Plan *node)
 			}
 
 		case T_SeqScan:
-		case T_MockSeqScan:
+		case T_SampleScan:
 		case T_TidScan:
 		case T_FunctionScan:
 		case T_ValuesScan:

@@ -306,9 +306,9 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 					fix_scan_list(root, splan->plan.qual, rtoffset);
 			}
 			break;
-		case T_MockSeqScan:
+		case T_SampleScan:
 			{
-				MockSeqScan     *splan = (MockSeqScan *) plan;
+				SampleScan     *splan = (SampleScan *) plan;
 
 				splan->scanrelid += rtoffset;
 				splan->plan.targetlist -

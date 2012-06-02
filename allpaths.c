@@ -376,8 +376,8 @@ set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	/* Consider sequential scan */
 //	add_path(rel, create_seqscan_path(root, rel, NULL));
 
-	/* Consider mock sequential scan */
-	add_path(rel, create_mockseqscan_path(root, rel, NULL));
+	/* Consider sample scan */
+	add_path(rel, create_samplescan_path(root, rel, NULL));
 
 	/* Consider index scans */
 	create_index_paths(root, rel);
