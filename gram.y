@@ -394,7 +394,6 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <ielem>	index_elem
 %type <node>	table_ref
 %type <jexpr>	joined_table
-%type <range>	relation_expr_opt_sample
 %type <range>	relation_expr
 %type <range>	relation_expr_opt_alias
 %type <target>	target_el single_set_clause set_target insert_column_item
@@ -8810,9 +8809,9 @@ simple_select:
 					$$ = (Node *)n;
 				}
 			| values_clause							{ $$ = $1; }
-			| TABLE relation_expr_opt_sample
+			| TABLE relation_expr
 				{
-					/* same as SELECT * FROM relation_expr_opt_sample */
+					/* same as SELECT * FROM relation_expr */
 					ColumnRef *cr = makeNode(ColumnRef);
 					ResTarget *rt = makeNode(ResTarget);
 					SelectStmt *n = makeNode(SelectStmt);
@@ -9181,11 +9180,11 @@ from_list:
  * and joined_table := '(' joined_table ')'.  So, we must have the
  * redundant-looking productions here instead.
  */
-table_ref:	relation_expr_opt_sample
+table_ref:	relation_expr
 				{
 					$$ = (Node *) $1;
 				}
-			| relation_expr_opt_sample alias_clause
+			| relation_expr alias_clause
 				{
 					$1->alias = $2;
 					$$ = (Node *) $1;
@@ -9415,69 +9414,6 @@ join_qual:	USING '(' name_list ')'					{ $$ = (Node *) $3; }
 		;
 
 
-/*
- * We want to allow the TABLESAMPLE clause to be specified for 
- * SELECT, DELETE, and UPDATE, but not for DDL commands. Therefore,
- * we add a new production that is "relation_expr + optional TABLESAMPLE",
- * and use that anywhere we'd like to allow a TABLESAMPLE clause to be specified.
- *
- */
-relation_expr_opt_sample:
-			relation_expr opt_table_sample
-				{
-					$$ = $1;
-					$$->sample_info = (TableSampleInfo *) $2;
-				}
-
-opt_table_sample:
-			TABLESAMPLE sample_method '('Iconst')' opt_repeatable_clause
-			{
-				TableSampleInfo *n = makeNode(TableSampleInfo);
-
-				If ($2 == true)
-					n->sample_method = SAMPLE_BERNOULLI;
-				else
-					n->sample_method = SAMPLE_SYSTEM;
-
-				n->sample_percent = $4;
-				if($4 > 100)
-					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_SAMPLE_SIZE),
-							 errmsg("TABLESAMPLE percentage"
-									"be greater than 100")));
-				if($4 < 0)
-					ereport(ERROR,
-							(errcode(ERRCODE_INVALID_SAMPLE_SIZE),
-							 errmsg("TABLESAMPLE percentage must"
-									"be greater than 0")));
-
-				/* not supported yet */
-				if(n->sample_method == SAMPLE_BERNOULLI)
-					ereport(ERROR,
-							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("BERNOULLI sampling is not supported")));
-
-				if($6 != NULL)
-				{
-					n->is_repeatable = true;
-					n->repeat_seed = intVal(%6);
-				}
-
-				$$ = (Node *)n;
-			}
-			| /*EMPTY*/  {$$ = NULL;}
-			;
-
-sample_method:
-			BERNOULLI			{ $$ = true; }
-			| SYSTEM_P			{ $$ = false; }
-			;
-
-opt_repeatable_clause:
-			REPEATABLE '('Iconst')'			{ $$ = makeInteger($3); }
-			| /* EMPTY */					{ $$ = NULL; }
-			;
-
 relation_expr:
 			qualified_name
 				{
@@ -9511,8 +9447,8 @@ relation_expr:
 
 
 relation_expr_list:
-			relation_expr_opt_sample							{ $$ = list_make1($1); }
-			| relation_expr_list ',' relation_expr_opt_sample	{ $$ = lappend($1, $3); }
+			relation_expr							{ $$ = list_make1($1); }
+			| relation_expr_list ',' relation_expr	{ $$ = lappend($1, $3); }
 		;
 
 
@@ -9525,18 +9461,18 @@ relation_expr_list:
  * has, causing the parser to prefer to reduce, in effect assuming that the
  * SET is not an alias.
  */
-relation_expr_opt_alias: relation_expr_opt_sample					%prec UMINUS
+relation_expr_opt_alias: relation_expr					%prec UMINUS
 				{
 					$$ = $1;
 				}
-			| relation_expr_opt_sample ColId
+			| relation_expr ColId
 				{
 					Alias *alias = makeNode(Alias);
 					alias->aliasname = $2;
 					$1->alias = alias;
 					$$ = $1;
 				}
-			| relation_expr_opt_sample AS ColId
+			| relation_expr AS ColId
 				{
 					Alias *alias = makeNode(Alias);
 					alias->aliasname = $3;
