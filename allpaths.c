@@ -373,17 +373,24 @@ set_plain_rel_size(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 static void
 set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 {
-	/* Consider sequential scan */
-//	add_path(rel, create_seqscan_path(root, rel, NULL));
+	/*
+	 * If there's a TABLESAMPLE clause, we ONLY consider using a SampleScan.
+	 * This could be improved: in some cicumstances it might make sense to do
+	 * an IndexScan and then sample from the index scan's result set, for instance.
+	 */
+	if(rel->has_table_sample)
+		add_path(rel, create_samplescan_path(root, rel, NULL));
+	else
+	{
+		/* Consider sequential scan */
+		add_path(rel, create_seqscan_path(root, rel, NULL));
 
-	/* Consider sample scan */
-	add_path(rel, create_samplescan_path(root, rel, NULL));
+		/* Consider index scans */
+		create_index_paths(root, rel);
 
-	/* Consider index scans */
-	create_index_paths(root, rel);
-
-	/* Consider TID scans */
-	create_tidscan_paths(root, rel);
+		/* Consider TID scans */
+		create_tidscan_paths(root, rel);
+	}
 
 	/* Now find the cheapest of the paths for this rel */
 	set_cheapest(rel);

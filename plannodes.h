@@ -271,10 +271,15 @@ typedef struct Scan
 typedef Scan SeqScan;
 
 /* ----------------
- *		sample scan node
+ * sample scan node
+ * Include the sampling information.
  * ----------------
  */
-typedef Scan SampleScan;
+typedef struct SampleScan
+{
+	Scan				scan;
+	TableSampleInfo	   *sample_info;
+} SampleScan;
 
 /* ----------------
  *		index scan node

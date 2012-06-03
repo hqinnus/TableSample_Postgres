@@ -3,14 +3,14 @@ cp ./Makefile ../postgres/src/backend/executor/
 cp ./execAmi.c ../postgres/src/backend/executor/
 cp ./execCurrent.c ../postgres/src/backend/executor/
 cp ./execProcnode.c ../postgres/src/backend/executor/
-cp ./nodeMockSeqscan.c ../postgres/src/backend/executor/
+cp ./nodeSamplescan.c ../postgres/src/backend/executor/
 cp ./copyfuncs.c ../postgres/src/backend/nodes/
 cp ./outfuncs.c ../postgres/src/backend/nodes/
 cp ./createplan.c ../postgres/src/backend/optimizer/plan/
 cp ./setrefs.c ../postgres/src/backend/optimizer/plan/
 cp ./subselect.c ../postgres/src/backend/optimizer/plan/
 cp ./pathnode.c ../postgres/src/backend/optimizer/util/
-cp ./nodeMockSeqscan.h ../postgres/src/include/executor/
+cp ./nodeSamplescan.h ../postgres/src/include/executor/
 cp ./execnodes.h ../postgres/src/include/nodes/
 cp ./nodes.h ../postgres/src/include/nodes/
 cp ./plannodes.h ../postgres/src/include/nodes/
@@ -19,3 +19,4 @@ cp ./cost.h ../postgres/src/include/optimizer/
 cp ./costsize.c ../postgres/src/backend/optimizer/path/
 cp ./allpaths.c ../postgres/src/backend/optimizer/path/
 cp ./gram.y ../postgres/src/backend/parser/
+cp ./primnodes.h ../postgres/src/include/nodes/

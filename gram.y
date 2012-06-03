@@ -394,6 +394,8 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <ielem>	index_elem
 %type <node>	table_ref
 %type <jexpr>	joined_table
+%type <node>	opt_table_sample
+%type <range>	relation_expr_opt_sample
 %type <range>	relation_expr
 %type <range>	relation_expr_opt_alias
 %type <target>	target_el single_set_clause set_target insert_column_item
@@ -555,7 +557,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 	STATEMENT STATISTICS STDIN STDOUT STORAGE STRICT_P STRIP_P SUBSTRING
 	SYMMETRIC SYSID SYSTEM_P
 
-	TABLE TABLES TABLESPACE TEMP TEMPLATE TEMPORARY TEXT_P THEN TIME TIMESTAMP
+	TABLE TABLES TABLESAMPLE TABLESPACE TEMP TEMPLATE TEMPORARY TEXT_P THEN TIME TIMESTAMP
 	TO TRAILING TRANSACTION TREAT TRIGGER TRIM TRUE_P
 	TRUNCATE TRUSTED TYPE_P TYPES_P
 
@@ -9413,6 +9415,42 @@ join_qual:	USING '(' name_list ')'					{ $$ = (Node *) $3; }
 			| ON a_expr								{ $$ = $2; }
 		;
 
+/*
+ * We want to allow the TABLESAMPLE clause to be specified for 
+ * SELECT, DELETE, and UPDATE, but not for DDL commands. Therefore,
+ * we add a new production that is "relation_expr + optional TABLESAMPLE",
+ * and use that anywhere we'd like to allow a TABLESAMPLE clause to be specified.
+ * /
+
+relation_expr_opt_sample:
+			relation_expr opt_table_sample
+			{
+				$$ = $1;
+				$$->sample_info = (TableSampleInfo *) $2;
+			}
+		;
+
+opt_table_sample:
+			TABLESAMPLE '('Iconst')'
+			{
+				TableSampleInfo *n = makeNode(TableSampleInfo);
+
+				n->sample_percent = $3;
+				if($3 > 100)
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_SAMPLE_SIZE),
+							 errmsg("TABLESAMPLE percentage"
+									"be greater than 100")));
+				if($3 < 0)
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_SAMPLE_SIZE),
+							 errmsg("TABLESAMPLE percentage must"
+									"be greater than 0")));
+
+				$$ = (Node *)n;
+			}
+			| /* EMPTY */ { $$ = NULL; }
+		;
 
 relation_expr:
 			qualified_name
