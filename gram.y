@@ -9182,11 +9182,11 @@ from_list:
  * and joined_table := '(' joined_table ')'.  So, we must have the
  * redundant-looking productions here instead.
  */
-table_ref:	relation_expr
+table_ref:	relation_expr_opt_sample
 				{
 					$$ = (Node *) $1;
 				}
-			| relation_expr alias_clause
+			| relation_expr_opt_sample alias_clause
 				{
 					$1->alias = $2;
 					$$ = (Node *) $1;
@@ -9499,18 +9499,18 @@ relation_expr_list:
  * has, causing the parser to prefer to reduce, in effect assuming that the
  * SET is not an alias.
  */
-relation_expr_opt_alias: relation_expr					%prec UMINUS
+relation_expr_opt_alias: relation_expr_opt_sample					%prec UMINUS
 				{
 					$$ = $1;
 				}
-			| relation_expr ColId
+			| relation_expr_opt_sample ColId
 				{
 					Alias *alias = makeNode(Alias);
 					alias->aliasname = $2;
 					$1->alias = alias;
 					$$ = $1;
 				}
-			| relation_expr AS ColId
+			| relation_expr_opt_sample AS ColId
 				{
 					Alias *alias = makeNode(Alias);
 					alias->aliasname = $3;
@@ -12586,6 +12586,7 @@ type_func_name_keyword:
 			| OVERLAPS
 			| RIGHT
 			| SIMILAR
+			| TABLESAMPLE
 			| VERBOSE
 		;
 

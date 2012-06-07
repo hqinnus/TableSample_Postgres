@@ -271,8 +271,15 @@ typedef struct Scan
 typedef Scan SeqScan;
 
 /* ----------------
- * sample scan node
- * Include the sampling information.
+ * SampleScan node
+ *
+ * This is the information about a SampleScan that is fixed for a given Plan.
+ * SampleScanState holds the run-time(executor-time) state associated with a
+ * given ScanScan node.
+ *
+ * In addition to our parent class, we need only a single additional piece of
+ * information: the information contained in the TABLESAMPLE clause that corresponds
+ * to this SampleScan.
  * ----------------
  */
 typedef struct SampleScan

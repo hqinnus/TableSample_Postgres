@@ -747,19 +747,20 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer)
  * create_samplescan_path
  *	  Creates a path corresponding to a sample scan, returning the
  *	  pathnode.
+ *	  Forked from create_seqscan_path, maybe there are other attributes needed.
  */
-Path *
+SamplePath *
 create_samplescan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer)
 {
-	Path	   *pathnode = makeNode(Path);
+	SamplePath	   *pathnode = makeNode(SamplePath);
 
-	pathnode->pathtype = T_SampleScan;
-	pathnode->parent = rel;
-	pathnode->param_info = get_baserel_parampathinfo(root, rel,
+	pathnode->path.pathtype = T_SampleScan;
+	pathnode->path.parent = rel;
+	pathnode->path.param_info = get_baserel_parampathinfo(root, rel,
 													 required_outer);
-	pathnode->pathkeys = NIL;	/* seqscan has unordered result */
+	pathnode->path.pathkeys = NIL;	/* samplescan has unordered result */
 
-	cost_samplescan(pathnode, root, rel, pathnode->param_info);
+	cost_samplescan(&pathnode->path, root, rel, pathnode->path.param_info);
 
 	return pathnode;
 }

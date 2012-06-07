@@ -1189,14 +1189,6 @@ typedef struct ScanState
  */
 typedef ScanState SeqScanState;
 
-
-/*
- * SampleScan uses a bare ScanState as its state node, since it needs
- * no additional fields.
- */
-typedef ScanState SampleScanState;
-
-
 /*
  * These structs store information about index quals that don't have simple
  * constant right-hand sides.  See comments for ExecIndexBuildScanKeys()
@@ -1425,6 +1417,56 @@ typedef struct ValuesScanState
 	int			curr_idx;
 	int			marked_idx;
 } ValuesScanState;
+
+/* --------------
+ * This State struct should be decided by the algorithm used in my Sampling
+ * method. Should have further modification via ANALYZE algo.
+ *
+ * SampleScanState: the run-time state associated with a single sample
+ * scan. This is the run-time dual of the SampleScan plan node: for
+ * each SampleScan in the Plan tree, we create a SampleScanState in
+ * the corresponding PlanState tree. A PlanState's associated Plan can
+ * be found via ss.ps.plan.
+ *
+ * In addition to the fields of its parent class (ScanState), a
+ * SampleScanState contains:
+ *
+ *		cur_buf: the current buffer/page being scanned, if any. The
+ *		         sample scan holds a pin on this buffer while it is
+ *		         executing, to ensure it isn't evicted from the buffer
+ *		         pool while we're using it. InvalidBuffer if we
+ *		         haven't started the scan yet, or the scan has
+ *		         finished (reached the end of the heap).
+ *
+ *		cur_offset: the current offset in the buffer being scanned.
+ *
+ *		cur_blkno: the BlockNumber of cur_buf -- that is, cur_buf's
+ *		           position within the heap.
+ *
+ *		nblocks: the total # of blocks in the relation being scanned.
+ *		         Unless the sample percentage is 100, the scan likely
+ *		         won't visit this many blocks.
+ *
+ *		new_need_buf: have we run out of tuples on the current page?
+ *
+ *		cur_tup: current result tuple.
+ *		rand_state: PRNG state.
+ * --------------
+ */
+typedef struct SampleScanState
+{
+	/* parent class; first field is NodeTag */
+	ScanState >->--->--- ss;
+	Buffer >>--->--->--- cur_buf;
+	OffsetNumber >-->--- cur_offset;
+	BlockNumber>>--->--- cur_blkno;
+	BlockNumber>>--->--- nblocks;
+	bool>--->--->--->--- need_new_buf;
+	HeapTupleData>-->--- cur_tup;
+	char >-->--->--->--- rand_state[128];
+	char >-->--->--->---*prev_rand_state;
+} SampleScanState;
+
 
 /* ----------------
  *	 CteScanState information

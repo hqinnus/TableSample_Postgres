@@ -378,6 +378,7 @@ set_plain_rel_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 * This could be improved: in some cicumstances it might make sense to do
 	 * an IndexScan and then sample from the index scan's result set, for instance.
 	 */
+	/* How to define this has_table_sample field??? Need to go to the parser and check. */
 	if(rel->has_table_sample)
 		add_path(rel, create_samplescan_path(root, rel, NULL));
 	else

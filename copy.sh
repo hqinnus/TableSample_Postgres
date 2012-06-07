@@ -20,3 +20,10 @@ cp ./costsize.c ../postgres/src/backend/optimizer/path/
 cp ./allpaths.c ../postgres/src/backend/optimizer/path/
 cp ./gram.y ../postgres/src/backend/parser/
 cp ./primnodes.h ../postgres/src/include/nodes/
+cp ./kwlist.h ../postgres/src/include/parser/
+cp ./parse_clause.c ../postgres/src/backend/parser/
+cp ./parsenodes.h ../postgres/src/include/nodes/
+cp ./parse_relation.c ../postgres/src/backend/parser/
+cp ./ruleutils.c ../postgres/src/backend/utils/adt/
+cp ./errcodes.txt ../postgres/src/backend/utils/
+cp ./relation.h ../postgres/src/include/nodes/
