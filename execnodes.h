@@ -1456,15 +1456,15 @@ typedef struct ValuesScanState
 typedef struct SampleScanState
 {
 	/* parent class; first field is NodeTag */
-	ScanState >->--->--- ss;
-	Buffer >>--->--->--- cur_buf;
-	OffsetNumber >-->--- cur_offset;
-	BlockNumber>>--->--- cur_blkno;
-	BlockNumber>>--->--- nblocks;
-	bool>--->--->--->--- need_new_buf;
-	HeapTupleData>-->--- cur_tup;
-	char >-->--->--->--- rand_state[128];
-	char >-->--->--->---*prev_rand_state;
+	ScanState			 ss;
+	Buffer				 cur_buf;
+	OffsetNumber		 cur_offset;
+	BlockNumber			 cur_blkno;
+	BlockNumber			 nblocks;
+	bool				 need_new_buf;
+	HeapTupleData		 cur_tup;
+	char				 rand_state[128];
+	char				 *prev_rand_state;
 } SampleScanState;
 
 

@@ -58,6 +58,26 @@ typedef enum OnCommitAction
 	ONCOMMIT_DROP				/* ON COMMIT DROP */
 } OnCommitAction;
 
+/*---------
+ * TableSampleMethod - defines the methods for tablesample query
+ *---------
+ */
+typedef enum TableSampleMethod
+{
+	SAMPLE_BERNOULLI,
+	SAMPLE_SYSTEM
+} TableSampleMethod;
+
+/*--------
+ * TableSampleInfo - information related to a tablesample query
+ *-------
+ */
+typedef struct TableSampleInfo
+{
+	NodeTag				type;
+	int					sample_percent;
+} TableSampleInfo;
+
 /*
  * RangeVar - range variable, used in FROM clauses
  *
@@ -1272,26 +1292,5 @@ typedef struct FromExpr
 	List	   *fromlist;		/* List of join subtrees */
 	Node	   *quals;			/* qualifiers on join, if any */
 } FromExpr;
-
-
-/*---------
- * TableSampleMethod - defines the methods for tablesample query
- *---------
- */
-typedef enum TableSampleMethod
-{
-	SAMPLE_BERNOULLI,
-	SAMPLE_SYSTEM
-} TableSampleMethod;
-
-/*--------
- * TableSampleInfo - information related to a tablesample query
- *-------
- */
-typedef struct TableSampleInfo
-{
-	NodeTag				type;
-	TableSampleMethod	sample_method;
-	int					sample_percent;
 
 #endif   /* PRIMNODES_H */

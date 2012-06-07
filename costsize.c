@@ -225,42 +225,43 @@ cost_seqscan(Path *path, PlannerInfo *root,
  */
 void
 cost_samplescan(Path *path, PlannerInfo *root,
-			 RelOptInfo *baserel, ParamPathInfo *param_info)
+			 RelOptInfo *baserel)
 {
-	Cost		startup_cost = 0;
-	Cost		run_cost = 0;
-	double		spc_seq_page_cost;
-	QualCost	qpqual_cost;
-	Cost		cpu_per_tuple;
+	Cost			startup_cost = 0;
+	Cost			run_cost = 0;
+	Cost			cpu_per_tuple;
+	RangeTblEntry	*rte;
+	int				sample_percent;
 
 	/* Should only be applied to base relations */
 	Assert(baserel->relid > 0);
 	Assert(baserel->rtekind == RTE_RELATION);
 
 	/* Mark the path with the correct row estimate */
-	if (param_info)
-		path->rows = param_info->ppi_rows;
+	if (path->path.param_info)
+		path->path.rows = path->path.param_info->ppi_rows;
 	else
-		path->rows = baserel->rows;
+		path->path.rows = baserel->rows;
 
 	if (!enable_samplescan)
 		startup_cost += disable_cost;
 
-	/* fetch estimated page cost for tablespace containing table */
-	get_tablespace_page_costs(baserel->reltablespace,
-							  NULL,
-							  &spc_seq_page_cost);
+	rte = planner_rt_fetch(baserel->relid, root);
+	sample_percent = rte->sample_info->sample_percent;
 
 	/*
 	 * disk costs
+	 * When the sample percentage is close to 100, we're likely to
+	 * be doing purely sequantial I/O. Conversely, for small percentage
+	 * samples, we're doing random I/O. Fow now, just be conservative
+	 * and always assume that we need to do a random I/O for each
+	 * sampled block. Of course, this is quite bogus.
 	 */
-	run_cost += spc_seq_page_cost * baserel->pages;
+	run_cost += random_page_cost * baserel->pages * sample_percent/100;
 
 	/* CPU costs */
-	get_restriction_qual_cost(root, baserel, param_info, &qpqual_cost);
-
-	startup_cost += qpqual_cost.startup;
-	cpu_per_tuple = cpu_tuple_cost + qpqual_cost.per_tuple;
+	startup_cost += baserel->baserestrictcost.startup;
+	cpu_per_tuple = cpu_tuple_cost + baserel->baserestrictcost.per_tuple;
 	run_cost += cpu_per_tuple * baserel->tuples;
 
 	path->startup_cost = startup_cost;
@@ -3460,6 +3461,17 @@ set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel)
 							   0,
 							   JOIN_INNER,
 							   NULL);
+
+	/* Consider TABLESAMPLE, if any. We assume the live heap rows are
+	 * uniformly distributed over the heap: this is a bogus simplifying
+	 * assumption. Note that the executor will apply the TABLESAMPLE
+	 * clause before applying any restrictions, we assume that the 
+	 * restrictions have the same selectivity for the sampled sub-relation
+	 * as they do for the entire relation (which is somewhat reasonable).
+	 */
+	rte = planner_rt_fetch(rel->relid, root);
+	if(rte->sample_info)
+		nrows = nrows*(rte->sample_info->sample_percent/100);
 
 	rel->rows = clamp_row_est(nrows);
 

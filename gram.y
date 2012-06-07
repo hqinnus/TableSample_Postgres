@@ -9420,7 +9420,7 @@ join_qual:	USING '(' name_list ')'					{ $$ = (Node *) $3; }
  * SELECT, DELETE, and UPDATE, but not for DDL commands. Therefore,
  * we add a new production that is "relation_expr + optional TABLESAMPLE",
  * and use that anywhere we'd like to allow a TABLESAMPLE clause to be specified.
- * /
+ */
 
 relation_expr_opt_sample:
 			relation_expr opt_table_sample
@@ -9449,7 +9449,7 @@ opt_table_sample:
 
 				$$ = (Node *)n;
 			}
-			| /* EMPTY */ { $$ = NULL; }
+			| /*EMPTY*/				{ $$ = NULL; }
 		;
 
 relation_expr:
