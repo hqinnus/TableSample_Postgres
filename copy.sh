@@ -27,3 +27,7 @@ cp ./parse_relation.c ../postgres/src/backend/parser/
 cp ./ruleutils.c ../postgres/src/backend/utils/adt/
 cp ./errcodes.txt ../postgres/src/backend/utils/
 cp ./relation.h ../postgres/src/include/nodes/
+cp ./relnode.c ../postgres/src/backend/optimizer/util/
+cp ./analyze.c ../postgres/src/backend/parser/
+cp ./equalfuncs.c ../postgres/src/backend/nodes/
+cp ./readfuncs.c ../postgres/src/backend/nodes/

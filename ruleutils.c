@@ -6729,7 +6729,7 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 			method_name = "SYSTEM";
 
 			appendStringInfo(buf, " TABLESAMPLE %s (%d)",
-							 method_name, sample_info->sample_percent;
+							 method_name, sample_info->sample_percent);
 		}
 	}
 	else if (IsA(jtnode, JoinExpr))

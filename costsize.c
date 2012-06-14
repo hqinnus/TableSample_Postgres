@@ -219,9 +219,6 @@ cost_seqscan(Path *path, PlannerInfo *root,
 /*
  * cost_samplescan
  *	  Determines and returns the cost of scanning a relation according to sample scan.
- *
- * 'baserel' is the relation to be scanned
- * 'param_info' is the ParamPathInfo if this is a parameterized path, else NULL
  */
 void
 cost_samplescan(Path *path, PlannerInfo *root,
@@ -236,15 +233,7 @@ cost_samplescan(Path *path, PlannerInfo *root,
 	/* Should only be applied to base relations */
 	Assert(baserel->relid > 0);
 	Assert(baserel->rtekind == RTE_RELATION);
-
-	/* Mark the path with the correct row estimate */
-	if (path->path.param_info)
-		path->path.rows = path->path.param_info->ppi_rows;
-	else
-		path->path.rows = baserel->rows;
-
-	if (!enable_samplescan)
-		startup_cost += disable_cost;
+	Assert(path->pathtype == T_SampleScan);
 
 	rte = planner_rt_fetch(baserel->relid, root);
 	sample_percent = rte->sample_info->sample_percent;
@@ -3443,7 +3432,7 @@ approx_tuple_count(PlannerInfo *root, JoinPath *path, List *quals)
  *
  * We set the following fields of the rel node:
  *	rows: the estimated number of output tuples (after applying
- *		  restriction clauses).
+ *		  restriction clauses and considering the effect of TABLESAMPLE).
  *	width: the estimated average output tuple width in bytes.
  *	baserestrictcost: estimated cost of evaluating baserestrictinfo clauses.
  */
@@ -3451,6 +3440,7 @@ void
 set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel)
 {
 	double		nrows;
+	RangeTblEntry	*rte;
 
 	/* Should only be applied to base relations */
 	Assert(rel->relid > 0);

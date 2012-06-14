@@ -362,6 +362,8 @@ _copySampleScan(const SampleScan *from)
 	 */
 	CopyScanFields((const Scan *) from, (Scan *) newnode);
 
+	COPY_NODE_FIELD(sample_info);
+
 	return newnode;
 }
 
@@ -1029,6 +1031,7 @@ _copyRangeVar(const RangeVar *from)
 	COPY_SCALAR_FIELD(inhOpt);
 	COPY_SCALAR_FIELD(relpersistence);
 	COPY_NODE_FIELD(alias);
+	COPY_NODE_FIELD(sample_info);
 	COPY_LOCATION_FIELD(location);
 
 	return newnode;
@@ -1820,6 +1823,22 @@ _copyFromExpr(const FromExpr *from)
 	return newnode;
 }
 
+
+/*
+ * _CopyTableSampleInfo
+ * Incomlete yet, without the sampling method and repeat seed support.
+ */
+static TableSampleInfo *
+_copyTableSampleInfo(const TableSampleInfo *from)
+{
+	TableSampleInfo *newnode = makeNode(TableSampleInfo);
+
+	COPY_SCALAR_FIELD(sample_percent);
+
+	return newnode;
+}
+
+
 /* ****************************************************************
  *						relation.h copy functions
  *
@@ -1971,6 +1990,7 @@ _copyRangeTblEntry(const RangeTblEntry *from)
 	COPY_SCALAR_FIELD(rtekind);
 	COPY_SCALAR_FIELD(relid);
 	COPY_SCALAR_FIELD(relkind);
+	COPY_NODE_FIELD(sample_info);
 	COPY_NODE_FIELD(subquery);
 	COPY_SCALAR_FIELD(security_barrier);
 	COPY_SCALAR_FIELD(jointype);
@@ -3831,9 +3851,6 @@ copyObject(const void *from)
 		case T_SeqScan:
 			retval = _copySeqScan(from);
 			break;
-		case T_SampleScan:
-			retval = _copySampleScan(from);
-			break;
 		case T_IndexScan:
 			retval = _copyIndexScan(from);
 			break;
@@ -3857,6 +3874,9 @@ copyObject(const void *from)
 			break;
 		case T_ValuesScan:
 			retval = _copyValuesScan(from);
+			break;
+		case T_SampleScan:
+			retval = _copySampleScan(from);
 			break;
 		case T_CteScan:
 			retval = _copyCteScan(from);
@@ -4056,6 +4076,9 @@ copyObject(const void *from)
 			break;
 		case T_FromExpr:
 			retval = _copyFromExpr(from);
+			break;
+		case T_TableSampleInfo:
+			retval = _copyTableSampleInfo(from);
 			break;
 
 			/*

@@ -442,6 +442,8 @@ _outSampleScan(StringInfo str, const SampleScan *node)
 	WRITE_NODE_TYPE("SAMPLESCAN");
 
 	_outScanInfo(str, (const Scan *) node);
+
+	WRITE_NODE_FIELD(sample_info);
 }
 
 static void
@@ -888,6 +890,7 @@ _outRangeVar(StringInfo str, const RangeVar *node)
 	WRITE_CHAR_FIELD(relpersistence);
 	WRITE_NODE_FIELD(alias);
 	WRITE_LOCATION_FIELD(location);
+	WRITE_NODE_FIELD(sample_info);
 }
 
 static void
@@ -1757,6 +1760,7 @@ _outRelOptInfo(StringInfo str, const RelOptInfo *node)
 	WRITE_FLOAT_FIELD(allvisfrac, "%.6f");
 	WRITE_NODE_FIELD(subplan);
 	WRITE_NODE_FIELD(subroot);
+	WRITE_BOOL_FIELD(has_table_sample);
 	/* we don't try to print fdwroutine or fdw_private */
 	WRITE_NODE_FIELD(baserestrictinfo);
 	WRITE_NODE_FIELD(joininfo);
@@ -2337,6 +2341,7 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 		case RTE_RELATION:
 			WRITE_OID_FIELD(relid);
 			WRITE_CHAR_FIELD(relkind);
+			WRITE_NODE_FIELD(sample_info);
 			break;
 		case RTE_SUBQUERY:
 			WRITE_NODE_FIELD(subquery);
@@ -2375,6 +2380,17 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 	WRITE_OID_FIELD(checkAsUser);
 	WRITE_BITMAPSET_FIELD(selectedCols);
 	WRITE_BITMAPSET_FIELD(modifiedCols);
+}
+
+/*
+ * not complete yet.
+ */
+static void
+_outTableSampleInfo(StringInfo str, TableSampleInfo *node)
+{
+	WRITE_NODE_TYPE("TABLESAMPLE");
+
+	WRITE_INT_FIELD(sample_percent);
 }
 
 static void
@@ -2742,9 +2758,6 @@ _outNode(StringInfo str, const void *obj)
 			case T_SeqScan:
 				_outSeqScan(str, obj);
 				break;
-			case T_SampleScan:
-				_outSampleScan(str, obj);
-				break;
 			case T_IndexScan:
 				_outIndexScan(str, obj);
 				break;
@@ -2768,6 +2781,9 @@ _outNode(StringInfo str, const void *obj)
 				break;
 			case T_ValuesScan:
 				_outValuesScan(str, obj);
+				break;
+			case T_SampleScan:
+				_outSampleScan(str, obj);
 				break;
 			case T_CteScan:
 				_outCteScan(str, obj);
@@ -3154,6 +3170,9 @@ _outNode(StringInfo str, const void *obj)
 				break;
 			case T_Constraint:
 				_outConstraint(str, obj);
+				break;
+			case T_TableSampleInfo:
+				_outTableSampleInfo(str, obj);
 				break;
 			case T_FuncCall:
 				_outFuncCall(str, obj);

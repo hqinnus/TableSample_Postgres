@@ -749,18 +749,16 @@ create_seqscan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer)
  *	  pathnode.
  *	  Forked from create_seqscan_path, maybe there are other attributes needed.
  */
-SamplePath *
-create_samplescan_path(PlannerInfo *root, RelOptInfo *rel, Relids required_outer)
+Path *
+create_samplescan_path(PlannerInfo *root, RelOptInfo *rel)
 {
-	SamplePath	   *pathnode = makeNode(SamplePath);
+	Path	   *pathnode = makeNode(Path);
 
-	pathnode->path.pathtype = T_SampleScan;
-	pathnode->path.parent = rel;
-	pathnode->path.param_info = get_baserel_parampathinfo(root, rel,
-													 required_outer);
-	pathnode->path.pathkeys = NIL;	/* samplescan has unordered result */
+	pathnode->pathtype = T_SampleScan;
+	pathnode->parent = rel;
+	pathnode->pathkeys = NIL;
 
-	cost_samplescan(&pathnode->path, root, rel, pathnode->path.param_info);
+	cost_samplescan(pathnode, root, rel);
 
 	return pathnode;
 }
@@ -2083,7 +2081,7 @@ reparameterize_path(PlannerInfo *root, Path *path,
 		case T_SeqScan:
 			return create_seqscan_path(root, rel, required_outer);
 		case T_SampleScan:
-			return create_samplescan_path(root, rel, required_outer);
+			return create_samplescan_path(root, rel);
 		case T_IndexScan:
 		case T_IndexOnlyScan:
 		{

@@ -709,18 +709,6 @@ typedef struct Path
 	((path)->param_info ? (path)->param_info->ppi_req_outer : (Relids) NULL)
 
 
-/*----------
- * SamplePath represents an sample scan.
- * Not sure what to store inside yet. But put TableSampleInfo
- * first, and to test and find out. 
- *----------
- */
-typedef struct SamplePath
-{
-	Path		*path;
-	TableSampleInfo *sample_info;
-} SamplePath;
-
 
 /*----------
  * IndexPath represents an index scan over a single index.
