@@ -292,6 +292,13 @@ InitScanRelation(SampleScanState *node, EState *estate)
 									 0,
 									 NULL);
 
+	/*                 
+	 * Determine the number of blocks in the relation. We need only do
+	 * this once for a given scan: if any new blocks are added to the
+	 * relation, they won't be visible to this transaction anyway.
+	 */                
+	node->nblocks = RelationGetNumberOfBlocks(currentRelation);
+
 	node->ss.ss_currentRelation = currentRelation;
 	node->ss.ss_currentScanDesc = currentScanDesc;
 
