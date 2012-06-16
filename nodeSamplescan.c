@@ -35,9 +35,9 @@
 #include "parser/parsetree.h"
 #include "storage/bufmgr.h"
 
+
 static void InitScanRelation(SampleScanState *node, EState *estate);
 static TupleTableSlot *SampleNext(SampleScanState *node);
-static void LoadNextSampleBuffer(SampleScanState *node);
 static int get_rand_in_range(int a, int b);
 
 /* ----------------------------------------------------------------
@@ -54,158 +54,41 @@ static int get_rand_in_range(int a, int b);
 static TupleTableSlot *
 SampleNext(SampleScanState *node)
 {
-	//HeapTuple	tuple;
-	//HeapScanDesc scandesc;
+	HeapTuple	tuple;
+	HeapScanDesc scandesc;
 	EState	   *estate;
-	//ScanDirection direction;
+	ScanDirection direction;
 	TupleTableSlot *slot;
-	Relation	   rel;
-	Index		   scanrelid;
+	SampleScan *plan_node = (SampleScan *) node->ss.ps.plan;
 
 	/*
 	 * get information from the estate and scan state
 	 */
-	//scandesc = node->ss.ss_currentScanDesc;
+	scandesc = node->ss.ss_currentScanDesc;
 	estate = node->ss.ps.state;
-	//direction = estate->es_direction;
+	direction = estate->es_direction;
 	slot = node->ss.ss_ScanTupleSlot;
-	rel  = node->ss.ss_currentRelation;
-	scanrelid = ((SampleScan *) node->ss.ps.plan)->scan.scanrelid;
 
-	while(true)
-	{
-		OffsetNumber	max_offset;
-		Page			page;
+	tuple = heap_getnext_samplescan(scandesc, plan_node->sample_info->sample_percent);
 
-		/*
-		 * If we don't have a valid buffer, choose the next block to
-		 * sample and load it into memory.
-		 */
-		if (node->need_new_buf)
-		{
-			LoadNextSampleBuffer(node);
-			node->need_new_buf = false;
+	/*              
+	 * save the tuple and the buffer returned to us by the access methods in
+	 * our scan tuple slot and return the slot.  Note: we pass 'false' because
+	 * tuples returned by heap_getnext() are pointers onto disk pages and were
+	 * not created with palloc() and so should not be pfree()'d.  Note also
+	 * that ExecStoreTuple will increment the refcount of the buffer; the
+	 * refcount will not be dropped until the tuple table slot is cleared.
+	 */
+	if (tuple)
+		ExecStoreTuple(tuple,	/* tuple to store */
+					   slot,	/* slot to store in */
+					   scandesc->rs_cbuf,		/* buffer associated with this
+												 * tuple */
+					   false);	/* don't pfree this pointer */
+	else
+		ExecClearTuple(slot);
 
-			/* We're out of blocks in the rel, so we're done */
-			if (!BufferIsValid(node->cur_buf))
-				break;
-		}
-
-		/*
-		 * Iterate through the current block, checking for heap tuples
-		 * that are visible to our transaction. Return each such 
-		 * candidate match:ExecScan() takes care of checking whether
-		 * the tuple satisfies the scan's quals.
-		 */
-		LockBuffer(node->cur_buf, BUFFER_LOCK_SHARE);
-		page = BufferGetPage(node->cur_buf);
-		max_offset = PageGetMaxOffsetNumber(page);
-		while (node->cur_offset <= max_offset)
-		{
-			/*
-			 * Postgres uses a somewhat unusual API for specifying the
-			 * location of the tuple we want to fetch. We've already
-			 * allocated space for a HeapTupleData; to indicate the TID
-			 * we want to fetch into the HeapTuple, we fillin its "t_self"
-			 * field, and then ask the heap access manager to fetch the
-			 * tuple's data for us. 
-			 */
-			ItemPointerSet(&node->cur_tup.t_self,
-						   node->cur_blkno, node->cur_offset);
-
-			node->cur_offset++;
-
-			if (heap_fetch(rel, estate->es_snapshot,
-								   &node->cur_tup, &node->cur_buf,
-								   true, NULL))
-			{
-				LockBuffer(node->cur_buf, BUFFER_LOCK_UNLOCK);
-
-				/*
-				 * save the tuple and the buffer returned to us by the access methods in
-				 * our scan tuple slot and return the slot.  Note: we pass 'false' because
-				 * tuples returned by heap_getnext() are pointers onto disk pages and were
-				 * not created with palloc() and so should not be pfree()'d.  Note also
-				 * that ExecStoreTuple will increment the refcount of the buffer; the
-				 * refcount will not be dropped until the tuple table slot is cleared.
-				 */
-				ExecStoreTuple(&node->cur_tup,
-							   slot,
-							   node->cur_buf,
-							   false);
-
-				return slot;
-			}
-		}
-		
-		/*
-		 * Out of tuples on this page, so we're done; clear result slot
-		 */
-		LockBuffer(node->cur_buf, BUFFER_LOCK_UNLOCK);
-		node->need_new_buf = true;
-	}
-
-	/* No more blocks to scan, so we're done; clear result slot. */
-	ExecClearTuple(slot);
-	return NULL;
-}
-
-/*
- * Choose the next block from the relation to sample. This is called when
- * (a) we haven't sampled any blocks from the relation yet(SampleScanState.cur_buf ==
- * InvalidBuffer) (b)we've examined every tuple in the block we're currently sampling.
- *
- * If we've run out of blocks in the relation, we leave 'cur_buf' as InvalidBuffer.
- */
-static void
-LoadNextSampleBuffer(SampleScanState *node)
-{
-	SampleScan *plan_node = (SampleScan *)node->ss.ps.plan;
-
-	while(true)
-	{
-		int rand_percent;
-
-		/*
-		 * If this is the first time through, start at the beginning of the heap.
-		 */
-		if (BlockNumberIsValid(node->cur_blkno))
-			node->cur_blkno++;
-		else
-			node->cur_blkno = 0;
-
-		rand_percent = get_rand_in_range(0, 100);
-
-		if(rand_percent >= plan_node->sample_info->sample_percent)
-			continue;
-
-		/*
-		 * If we've reached the end of the heap, we're done. Make sure to unpin
-		 * the current buffer, if any.
-		 */
-		 if(node->cur_blkno >= node->nblocks)
-		{
-			if(BufferIsValid(node->cur_buf))
-			{
-				ReleaseBuffer(node->cur_buf);
-				node->cur_buf = InvalidBuffer;
-			}
-
-			break;
-		}
-
-		/*
-		 * Okay, we've chosen another block to read: ask buffer manager to load
-		 * it into the buffer pool for us, pin it, and release the pin we hold
-		 * on the previous "cur_buf". For the case that "cur_buff" == InvalidBuffer,
-		 * ReleaseAndReadBuffer() is equivalent to ReadBuffer().
-		 */
-		node->cur_buf = ReleaseAndReadBuffer(node->cur_buf,
-											 node->ss.ss_currentRelation,
-											 node->cur_blkno);
-		node->cur_offset = FirstOffsetNumber;
-		break;
-	}
+	return slot;
 }
 
 /*
@@ -462,6 +345,11 @@ ExecEndSampleScan(SampleScanState *node)
 		ReleaseBuffer(node->cur_buf);
 		node->cur_buf = InvalidBuffer;
 	}
+
+	/*
+	 * Close heap scan
+	 */
+	heap_endscan(node->ss.ss_currentScanDesc);
 
 	/*
 	 * Note that ExecCloseScanRelation() does NOT release the lock we
