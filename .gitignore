@@ -13,3 +13,6 @@
 
 # vim tmp state file
 *.swp
+
+# ctags folder
+tags
