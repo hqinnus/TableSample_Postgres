@@ -396,6 +396,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <jexpr>	joined_table
 %type <node>	opt_table_sample
 %type <range>	relation_expr_opt_sample
+%type <value>	sample_method
 %type <range>	relation_expr
 %type <range>	relation_expr_opt_alias
 %type <target>	target_el single_set_clause set_target insert_column_item
@@ -491,7 +492,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 	AGGREGATE ALL ALSO ALTER ALWAYS ANALYSE ANALYZE AND ANY ARRAY AS ASC
 	ASSERTION ASSIGNMENT ASYMMETRIC AT ATTRIBUTE AUTHORIZATION
 
-	BACKWARD BEFORE BEGIN_P BETWEEN BIGINT BINARY BIT
+	BACKWARD BEFORE BEGIN_P BERNOULLI BETWEEN BIGINT BINARY BIT
 	BOOLEAN_P BOTH BY
 
 	CACHE CALLED CASCADE CASCADED CASE CAST CATALOG_P CHAIN CHAR_P
@@ -9431,17 +9432,26 @@ relation_expr_opt_sample:
 		;
 
 opt_table_sample:
-			TABLESAMPLE '('Iconst')'
+			TABLESAMPLE sample_method '('Iconst')'
 			{
 				TableSampleInfo *n = makeNode(TableSampleInfo);
 
-				n->sample_percent = $3;
-				if($3 > 100)
+				if( $2 == 1 )
+					n->sample_method = SAMPLE_BERNOULLI;
+				else if( $2 == 2 )
+					n->sample_method = SAMPLE_SYSTEM;
+				else
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("Sampling method not supported")));
+
+				n->sample_percent = $4;
+				if($4 > 100)
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_SAMPLE_SIZE),
 							 errmsg("TABLESAMPLE percentage"
 									"be greater than 100")));
-				if($3 < 0)
+				if($4 < 0)
 					ereport(ERROR,
 							(errcode(ERRCODE_INVALID_SAMPLE_SIZE),
 							 errmsg("TABLESAMPLE percentage must"
@@ -9451,6 +9461,10 @@ opt_table_sample:
 			}
 			| /*EMPTY*/				{ $$ = NULL; }
 		;
+
+sample_method:
+			BERNOULLI				{ $$ = 1; }
+			| SYSTEM_P 				{ $$ = 2; }
 
 relation_expr:
 			qualified_name
@@ -12259,6 +12273,7 @@ unreserved_keyword:
 			| BACKWARD
 			| BEFORE
 			| BEGIN_P
+			| BERNOULLI
 			| BY
 			| CACHE
 			| CALLED

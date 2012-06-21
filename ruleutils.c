@@ -6718,7 +6718,6 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 			get_from_clause_alias(rte->alias, rte, context);
 		}
 
-		/* SAMPLE METHOD and REPEATABLE support needs to be added later here */
 		if (rte->sample_info)
 		{
 			TableSampleInfo		*sample_info = rte->sample_info;
@@ -6726,7 +6725,19 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 
 			Assert(rte->rtekind == RTE_RELATION);
 
-			method_name = "SYSTEM";
+			switch(sample_info->sample_method)
+			{
+				case SAMPLE_BERNOULLI:
+					method_name = "BERNOULLI";
+					break;
+				case SAMPLE_SYSTEM:
+					method_name = "SYSTEM";
+					break;
+				default:
+					elog(ERROR, "unrecognized sample method: %s", 
+						 (int) sample_info->sample_method);
+					method_name = NULL;
+			}
 
 			appendStringInfo(buf, " TABLESAMPLE %s (%d)",
 							 method_name, sample_info->sample_percent);

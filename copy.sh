@@ -33,3 +33,4 @@ cp ./equalfuncs.c ../postgres/src/backend/nodes/
 cp ./readfuncs.c ../postgres/src/backend/nodes/
 cp ./heapam.c ../postgres/src/backend/access/heap/
 cp ./heapam.h ../postgres/src/include/access/
+cp ./relscan.h ../postgres/src/include/access/

@@ -38,7 +38,6 @@
 
 static void InitScanRelation(SampleScanState *node, EState *estate);
 static TupleTableSlot *SampleNext(SampleScanState *node);
-static int get_rand_in_range(int a, int b);
 
 /* ----------------------------------------------------------------
  *						Scan Support
@@ -60,6 +59,9 @@ SampleNext(SampleScanState *node)
 	ScanDirection direction;
 	TupleTableSlot *slot;
 	SampleScan *plan_node = (SampleScan *) node->ss.ps.plan;
+	TableSampleMethod sample_method = plan_node->sample_info->sample_method;
+	int				  sample_percent = plan_node->sample_info->sample_percent;
+	BernoulliSampler	  bs = node->bsampler;
 
 	/*
 	 * get information from the estate and scan state
@@ -69,7 +71,8 @@ SampleNext(SampleScanState *node)
 	direction = estate->es_direction;
 	slot = node->ss.ss_ScanTupleSlot;
 
-	tuple = heap_getnext_samplescan(scandesc, plan_node->sample_info->sample_percent);
+	tuple = heap_getnext_samplescan(scandesc, sample_percent,
+								sample_method, bs);
 
 	/*              
 	 * save the tuple and the buffer returned to us by the access methods in
@@ -89,20 +92,6 @@ SampleNext(SampleScanState *node)
 		ExecClearTuple(slot);
 
 	return slot;
-}
-
-/*
- * Returns a randomly-generated trigger x, such that a <= x < b
- */
-static int
-get_rand_in_range(int a, int b)
-{
-	/*
-	 * XXX: Using modulus takes the low-order bits of the random
-	 * number; since the high-order bits may contain more entropy
-	 * with more PRNGs, we should probably use those instead.
-	 */
-	return (random() % b) + a;
 }
 
 /*
@@ -175,13 +164,6 @@ InitScanRelation(SampleScanState *node, EState *estate)
 									 0,
 									 NULL);
 
-	/*                 
-	 * Determine the number of blocks in the relation. We need only do
-	 * this once for a given scan: if any new blocks are added to the
-	 * relation, they won't be visible to this transaction anyway.
-	 */                
-	node->nblocks = RelationGetNumberOfBlocks(currentRelation);
-
 	node->ss.ss_currentRelation = currentRelation;
 	node->ss.ss_currentScanDesc = currentScanDesc;
 
@@ -196,6 +178,9 @@ SampleScanState *
 ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 {
 	SampleScanState *scanstate;
+	TableSampleMethod sample_method = node->sample_info->sample_method;
+	int				  sample_percent = node->sample_info->sample_percent;
+	int				  targrows = node->sample_info->sample_rows;
 
 	/*
 	 * We don't expect to have any child plan node
@@ -209,10 +194,6 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	scanstate = makeNode(SampleScanState);
 	scanstate->ss.ps.plan = (Plan *) node;
 	scanstate->ss.ps.state = estate;
-	scanstate->cur_buf		 = InvalidBuffer;
-	scanstate->cur_offset	 = FirstOffsetNumber;
-	scanstate->cur_blkno	 = InvalidBlockNumber;
-	scanstate->need_new_buf  = true;
 
 	/*
 	 * Miscellaneous initialization
@@ -232,12 +213,6 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 					 (PlanState *) scanstate);
 
 	/*
-	 * This part seems no use anymore, and the ExecCountSlotsSampleScan is not in execProcNode.c
-	 * any more.
-     #define SAMPLESCAN_NSLOTS 2
-	 */
-
-	/*
 	 * tuple table initialization
 	 */
 	ExecInitResultTupleSlot(estate, &scanstate->ss.ps);
@@ -255,6 +230,20 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	 */
 	ExecAssignResultTypeFromTL(&scanstate->ss.ps);
 	ExecAssignScanProjectionInfo(&scanstate->ss);
+
+	/*
+	 * Initialize fields of SampleScanState for BERNOULLI
+	 */
+	if(sample_method == SAMPLE_BERNOULLI)
+	{
+		HeapScanDesc scan = scanstate->ss.ss_currentScanDesc;
+
+		scan->targrows = targrows;
+		scan->rs_samplerows = (HeapTuple *)palloc(targrows * sizeof(HeapTuple));
+		scan->rs_curindex = 0;
+		scan->rs_samplesize = 0;
+		scan->rs_sampleinited = false;
+	}
 
 	/*
 	 * There is repeatable support code section from Neil's code
@@ -339,12 +328,6 @@ ExecEndSampleScan(SampleScanState *node)
 
 	ExecClearTuple(node->ss.ps.ps_ResultTupleSlot);
 	ExecClearTuple(node->ss.ss_ScanTupleSlot);
-
-	if (BufferIsValid(node->cur_buf))
-	{
-		ReleaseBuffer(node->cur_buf);
-		node->cur_buf = InvalidBuffer;
-	}
 
 	/*
 	 * Close heap scan

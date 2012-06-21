@@ -3464,6 +3464,7 @@ set_baserel_size_estimates(PlannerInfo *root, RelOptInfo *rel)
 		nrows = nrows*(rte->sample_info->sample_percent/100);
 
 	rel->rows = clamp_row_est(nrows);
+	rte->sample_info->sample_rows = rel->rows;
 
 	cost_qual_eval(&rel->baserestrictcost, rel->baserestrictinfo, root);
 

@@ -2383,7 +2383,7 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 }
 
 /*
- * not complete yet.
+ * not complete yet, need repeat sead.
  */
 static void
 _outTableSampleInfo(StringInfo str, TableSampleInfo *node)
@@ -2391,6 +2391,8 @@ _outTableSampleInfo(StringInfo str, TableSampleInfo *node)
 	WRITE_NODE_TYPE("TABLESAMPLE");
 
 	WRITE_INT_FIELD(sample_percent);
+	WRITE_INT_FIELD(sample_rows);
+	WRITE_ENUM_FIELD(sample_method, TableSampleMethod);
 }
 
 static void
