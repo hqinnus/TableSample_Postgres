@@ -180,7 +180,7 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	SampleScanState *scanstate;
 	TableSampleMethod sample_method = node->sample_info->sample_method;
 	int				  sample_percent = node->sample_info->sample_percent;
-	int				  targrows = node->sample_info->sample_rows;
+	BernoulliSamplerData bs;
 
 	/*
 	 * We don't expect to have any child plan node
@@ -194,6 +194,7 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	scanstate = makeNode(SampleScanState);
 	scanstate->ss.ps.plan = (Plan *) node;
 	scanstate->ss.ps.state = estate;
+	scanstate->bsampler = &bs;
 
 	/*
 	 * Miscellaneous initialization
@@ -237,6 +238,9 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	if(sample_method == SAMPLE_BERNOULLI)
 	{
 		HeapScanDesc scan = scanstate->ss.ss_currentScanDesc;
+		double numtuples = scan->rs_rd->rd_rel->reltuples;
+		double row_test = numtuples*sample_percent/100;
+		int targrows = (int)floor(row_test + 0.5);
 
 		scan->targrows = targrows;
 		scan->rs_samplerows = (HeapTuple *)palloc(targrows * sizeof(HeapTuple));
