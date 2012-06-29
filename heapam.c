@@ -93,7 +93,7 @@ static void BlockSampler_Init(BernoulliSampler bs, BlockNumber nblocks,
 static bool BlockSampler_HasMore(BernoulliSampler bs);
 static BlockNumber BlockSampler_Next(BernoulliSampler bs);
 static void acquire_next_sampletup(HeapScanDesc scan, BernoulliSampler bs);
-static void acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs);
+static void acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs);
 static double anl_random_fract(void);
 static double anl_init_selection_state(int n);
 static double anl_get_next_S(double t, int n, double *stateptr);
@@ -6081,7 +6081,7 @@ acquire_next_sampletup(HeapScanDesc scan, BernoulliSampler bs)
 	HeapTuple		pass_tuple;
 
 	if(!scan->rs_sampleinited)
-		acquire_sample_rows(scan, bs);
+		acquire_bernoulli_sample(scan, bs);
 
 	if(scan->rs_curindex < scan->rs_samplesize)
 	{
@@ -6104,7 +6104,7 @@ acquire_next_sampletup(HeapScanDesc scan, BernoulliSampler bs)
 
 
 static void
-acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
+acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs)
 {
 	int			numrows = 0;	/* # rows now in reservoir */
 	double		samplerows = 0; /* total # rows collected */
@@ -6116,12 +6116,12 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 	double		rstate;
 	int			targrows = scan->targrows;
 	HeapTuple	*rows = scan->rs_samplerows;
-//	Relation relation = scan->rs_rd;
+	Relation onerel = scan->rs_rd;
 
 	Assert(targrows > 0);
 
 	/* Need a cutoff xmin for HeapTupleSatisfiesVacuum */
-	OldestXmin = GetOldestXmin(scan->rs_rd->rd_rel->relisshared, true);
+	OldestXmin = GetOldestXmin(onerel->rd_rel->relisshared, true);
 
 	/* Prepare for sampling block numbers */ 
 	BlockSampler_Init(bs, totalblocks, targrows);
@@ -6146,7 +6146,7 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 		 * tuple, but since we aren't doing much work per tuple, the extra
 		 * lock traffic is probably better avoided.
 		 */
-		targbuffer = ReadBufferExtended(scan->rs_rd, MAIN_FORKNUM, targblock,
+		targbuffer = ReadBufferExtended(onerel, MAIN_FORKNUM, targblock,
 										RBM_NORMAL, scan->rs_strategy);
 		LockBuffer(targbuffer, BUFFER_LOCK_SHARE);
 		targpage = BufferGetPage(targbuffer);
@@ -6173,119 +6173,49 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 			targtuple.t_data = (HeapTupleHeader) PageGetItem(targpage, itemid);
 			targtuple.t_len = ItemIdGetLength(itemid);
 
-//			switch (HeapTupleSatisfiesVacuum(targtuple.t_data,
-//											 OldestXmin,
-//											 targbuffer))
-//			{
-//				case HEAPTUPLE_LIVE:
-//					sample_it = true;
-//					liverows += 1;
-//					break;
-//
-//				case HEAPTUPLE_DEAD:
-//				case HEAPTUPLE_RECENTLY_DEAD:
-//					/* Count dead and recently-dead rows */
-//					deadrows += 1;
-//					break;
-//
-//				case HEAPTUPLE_INSERT_IN_PROGRESS:
-//
-//					/*
-//					 * Insert-in-progress rows are not counted.  We assume
-//					 * that when the inserting transaction commits or aborts,
-//					 * it will send a stats message to increment the proper
-//					 * count.  This works right only if that transaction ends
-//					 * after we finish analyzing the table; if things happen
-//					 * in the other order, its stats update will be
-//					 * overwritten by ours.  However, the error will be large
-//					 * only if the other transaction runs long enough to
-//					 * insert many tuples, so assuming it will finish after us
-//					 * is the safer option.
-//					 *
-//					 * A special case is that the inserting transaction might
-//					 * be our own.	In this case we should count and sample
-//					 * the row, to accommodate users who load a table and
-//					 * analyze it in one transaction.  (pgstat_report_analyze
-//					 * has to adjust the numbers we send to the stats
-//					 * collector to make this come out right.)
-//					 */
-//					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(targtuple.t_data)))
-//					{
-//						sample_it = true;
-//						liverows += 1;
-//					}
-//					break;
-//
-//				case HEAPTUPLE_DELETE_IN_PROGRESS:
-//
-//					/*
-//					 * We count delete-in-progress rows as still live, using
-//					 * the same reasoning given above; but we don't bother to
-//					 * include them in the sample.
-//					 *
-//					 * If the delete was done by our own transaction, however,
-//					 * we must count the row as dead to make
-//					 * pgstat_report_analyze's stats adjustments come out
-//					 * right.  (Note: this works out properly when the row was
-//					 * both inserted and deleted in our xact.)
-//					 */
-//					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmax(targtuple.t_data)))
-//						deadrows += 1;
-//					else
-//						liverows += 1;
-//					break;
-//
-//				default:
-//					elog(ERROR, "unexpected HeapTupleSatisfiesVacuum result");
-//					break;
-//			}
-
-//			if (sample_it)
-//			{
+			/*
+			 * The first targrows sample rows are simply copied into the
+			 * reservoir. Then we start replacing tuples in the sample
+			 * until we reach the end of the relation.	This algorithm is
+			 * from Jeff Vitter's paper (see full citation below). It
+			 * works by repeatedly computing the number of tuples to skip
+			 * before selecting a tuple, which replaces a randomly chosen
+			 * element of the reservoir (current set of tuples).  At all
+			 * times the reservoir is a true random sample of the tuples
+			 * we've passed over so far, so when we fall off the end of
+			 * the relation we're done.
+			 */
+			if (numrows < targrows)
+				rows[numrows++] = heap_copytuple(&targtuple);
+			else
+			{
 				/*
-				 * The first targrows sample rows are simply copied into the
-				 * reservoir. Then we start replacing tuples in the sample
-				 * until we reach the end of the relation.	This algorithm is
-				 * from Jeff Vitter's paper (see full citation below). It
-				 * works by repeatedly computing the number of tuples to skip
-				 * before selecting a tuple, which replaces a randomly chosen
-				 * element of the reservoir (current set of tuples).  At all
-				 * times the reservoir is a true random sample of the tuples
-				 * we've passed over so far, so when we fall off the end of
-				 * the relation we're done.
+				 * t in Vitter's paper is the number of records already
+				 * processed.  If we need to compute a new S value, we
+				 * must use the not-yet-incremented value of samplerows as
+				 * t.
 				 */
-				if (numrows < targrows)
-					rows[numrows++] = heap_copytuple(&targtuple);
-				else
+				if (rowstoskip < 0)
+					rowstoskip = anl_get_next_S(samplerows, targrows,
+												&rstate);
+
+				if (rowstoskip <= 0)
 				{
 					/*
-					 * t in Vitter's paper is the number of records already
-					 * processed.  If we need to compute a new S value, we
-					 * must use the not-yet-incremented value of samplerows as
-					 * t.
+					 * Found a suitable tuple, so save it, replacing one
+					 * old tuple at random
 					 */
-					if (rowstoskip < 0)
-						rowstoskip = anl_get_next_S(samplerows, targrows,
-													&rstate);
+					int			k = (int) (targrows * anl_random_fract());
 
-					if (rowstoskip <= 0)
-					{
-						/*
-						 * Found a suitable tuple, so save it, replacing one
-						 * old tuple at random
-						 */
-						int			k = (int) (targrows * anl_random_fract());
-
-						Assert(k >= 0 && k < targrows);
-						heap_freetuple(rows[k]);
-						rows[k] = heap_copytuple(&targtuple);
-					}
-
-					rowstoskip -= 1;
+					Assert(k >= 0 && k < targrows);
+					heap_freetuple(rows[k]);
+					rows[k] = heap_copytuple(&targtuple);
 				}
 
-				samplerows += 1;
-//			}
+				rowstoskip -= 1;
+			}
+
+			samplerows += 1;
 		}
 
 		/* Now release the lock and pin on the page */
