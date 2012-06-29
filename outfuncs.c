@@ -2391,7 +2391,6 @@ _outTableSampleInfo(StringInfo str, TableSampleInfo *node)
 	WRITE_NODE_TYPE("TABLESAMPLE");
 
 	WRITE_INT_FIELD(sample_percent);
-	WRITE_INT_FIELD(sample_rows);
 	WRITE_ENUM_FIELD(sample_method, TableSampleMethod);
 }
 

@@ -6132,17 +6132,10 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 	while (BlockSampler_HasMore(bs))
 	{
 		BlockNumber targblock = BlockSampler_Next(bs);
-//		HeapTuple	tuple = &(scan->rs_ctup);
 		Buffer		targbuffer;
 		Page		targpage;
 		OffsetNumber targoffset,
 					maxoffset;
-//		int			lines;
-//		int			lineindex;
-//		int			linesleft;
-//		OffsetNumber lineoff;
-
-		vacuum_delay_point();
 
 		/*
 		 * We must maintain a pin on the target page's buffer to ensure that
@@ -6153,32 +6146,20 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 		 * tuple, but since we aren't doing much work per tuple, the extra
 		 * lock traffic is probably better avoided.
 		 */
-//		heapgetpage(scan, targblock);
 		targbuffer = ReadBufferExtended(scan->rs_rd, MAIN_FORKNUM, targblock,
 										RBM_NORMAL, scan->rs_strategy);
 		LockBuffer(targbuffer, BUFFER_LOCK_SHARE);
 		targpage = BufferGetPage(targbuffer);
 
-//		targpage = BufferGetPage(scan->rs_cbuf);
 		maxoffset = PageGetMaxOffsetNumber(targpage);
-//		lines = scan->rs_ntuples;
-//		lineindex = 0;
-
-//		linesleft = lines - lineindex;
 
 		for (targoffset = FirstOffsetNumber; targoffset <= maxoffset; targoffset++)
 		{
-//			lineoff = scan->rs_vistuples[lineindex];
 			ItemId itemid; 
 			HeapTupleData targtuple;
 			bool sample_it = false;
-//			Assert(ItemIdIsNormal(itemid));
 
 			itemid = PageGetItemId(targpage, targoffset);
-
-			//tuple->t_data = (HeapTupleHeader) PageGetItem((Page) targpage, itemid);
-			//tuple->t_len = ItemIdGetLength(itemid);
-			//ItemPointerSet(&(tuple->t_self), targblock, lineoff);
 
 			if (!ItemIdIsNormal(itemid))
 			{
@@ -6192,75 +6173,75 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 			targtuple.t_data = (HeapTupleHeader) PageGetItem(targpage, itemid);
 			targtuple.t_len = ItemIdGetLength(itemid);
 
-			switch (HeapTupleSatisfiesVacuum(targtuple.t_data,
-											 OldestXmin,
-											 targbuffer))
-			{
-				case HEAPTUPLE_LIVE:
-					sample_it = true;
-					liverows += 1;
-					break;
+//			switch (HeapTupleSatisfiesVacuum(targtuple.t_data,
+//											 OldestXmin,
+//											 targbuffer))
+//			{
+//				case HEAPTUPLE_LIVE:
+//					sample_it = true;
+//					liverows += 1;
+//					break;
+//
+//				case HEAPTUPLE_DEAD:
+//				case HEAPTUPLE_RECENTLY_DEAD:
+//					/* Count dead and recently-dead rows */
+//					deadrows += 1;
+//					break;
+//
+//				case HEAPTUPLE_INSERT_IN_PROGRESS:
+//
+//					/*
+//					 * Insert-in-progress rows are not counted.  We assume
+//					 * that when the inserting transaction commits or aborts,
+//					 * it will send a stats message to increment the proper
+//					 * count.  This works right only if that transaction ends
+//					 * after we finish analyzing the table; if things happen
+//					 * in the other order, its stats update will be
+//					 * overwritten by ours.  However, the error will be large
+//					 * only if the other transaction runs long enough to
+//					 * insert many tuples, so assuming it will finish after us
+//					 * is the safer option.
+//					 *
+//					 * A special case is that the inserting transaction might
+//					 * be our own.	In this case we should count and sample
+//					 * the row, to accommodate users who load a table and
+//					 * analyze it in one transaction.  (pgstat_report_analyze
+//					 * has to adjust the numbers we send to the stats
+//					 * collector to make this come out right.)
+//					 */
+//					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(targtuple.t_data)))
+//					{
+//						sample_it = true;
+//						liverows += 1;
+//					}
+//					break;
+//
+//				case HEAPTUPLE_DELETE_IN_PROGRESS:
+//
+//					/*
+//					 * We count delete-in-progress rows as still live, using
+//					 * the same reasoning given above; but we don't bother to
+//					 * include them in the sample.
+//					 *
+//					 * If the delete was done by our own transaction, however,
+//					 * we must count the row as dead to make
+//					 * pgstat_report_analyze's stats adjustments come out
+//					 * right.  (Note: this works out properly when the row was
+//					 * both inserted and deleted in our xact.)
+//					 */
+//					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmax(targtuple.t_data)))
+//						deadrows += 1;
+//					else
+//						liverows += 1;
+//					break;
+//
+//				default:
+//					elog(ERROR, "unexpected HeapTupleSatisfiesVacuum result");
+//					break;
+//			}
 
-				case HEAPTUPLE_DEAD:
-				case HEAPTUPLE_RECENTLY_DEAD:
-					/* Count dead and recently-dead rows */
-					deadrows += 1;
-					break;
-
-				case HEAPTUPLE_INSERT_IN_PROGRESS:
-
-					/*
-					 * Insert-in-progress rows are not counted.  We assume
-					 * that when the inserting transaction commits or aborts,
-					 * it will send a stats message to increment the proper
-					 * count.  This works right only if that transaction ends
-					 * after we finish analyzing the table; if things happen
-					 * in the other order, its stats update will be
-					 * overwritten by ours.  However, the error will be large
-					 * only if the other transaction runs long enough to
-					 * insert many tuples, so assuming it will finish after us
-					 * is the safer option.
-					 *
-					 * A special case is that the inserting transaction might
-					 * be our own.	In this case we should count and sample
-					 * the row, to accommodate users who load a table and
-					 * analyze it in one transaction.  (pgstat_report_analyze
-					 * has to adjust the numbers we send to the stats
-					 * collector to make this come out right.)
-					 */
-					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(targtuple.t_data)))
-					{
-						sample_it = true;
-						liverows += 1;
-					}
-					break;
-
-				case HEAPTUPLE_DELETE_IN_PROGRESS:
-
-					/*
-					 * We count delete-in-progress rows as still live, using
-					 * the same reasoning given above; but we don't bother to
-					 * include them in the sample.
-					 *
-					 * If the delete was done by our own transaction, however,
-					 * we must count the row as dead to make
-					 * pgstat_report_analyze's stats adjustments come out
-					 * right.  (Note: this works out properly when the row was
-					 * both inserted and deleted in our xact.)
-					 */
-					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmax(targtuple.t_data)))
-						deadrows += 1;
-					else
-						liverows += 1;
-					break;
-
-				default:
-					elog(ERROR, "unexpected HeapTupleSatisfiesVacuum result");
-					break;
-			}
-
-			if (sample_it)
-			{
+//			if (sample_it)
+//			{
 				/*
 				 * The first targrows sample rows are simply copied into the
 				 * reservoir. Then we start replacing tuples in the sample
@@ -6304,9 +6285,7 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 				}
 
 				samplerows += 1;
-//				--linesleft;
-//				++lineindex;
-			}
+//			}
 		}
 
 		/* Now release the lock and pin on the page */
@@ -6315,52 +6294,6 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 
 	scan->rs_samplesize = numrows;
 	scan->rs_sampleinited = true;
-
-	/*
-	 * If we didn't find as many tuples as we wanted then we're done. No sort
-	 * is needed, since they're already in order.
-	 *
-	 * Otherwise we need to sort the collected tuples by position
-	 * (itempointer). It's not worth worrying about corner cases where the
-	 * tuples are already sorted.
-	 *
-	 * Looks not useful for tablesample
-	 */
-//	if (numrows == targrows)
-//		qsort((void *) rows, numrows, sizeof(HeapTuple), compare_rows);
-
-	/*
-	 * Estimate total numbers of rows in relation.	For live rows, use
-	 * vac_estimate_reltuples; for dead rows, we have no source of old
-	 * information, so we have to assume the density is the same in unseen
-	 * pages as in the pages we scanned.
-	 * 
-	 *
-	 * Not useful for tablesample
-	 */
-//	*totalrows = vac_estimate_reltuples(onerel, true,
-//										totalblocks,
-//										bs.m,
-//										liverows);
-//	if (bs.m > 0)
-//		*totaldeadrows = floor((deadrows / bs.m) * totalblocks + 0.5);
-//	else
-//		*totaldeadrows = 0.0;
-
-	/*
-	 * Emit some interesting relation info
-	 *
-	 *
-	 * Not useful for tablesample
-	 */
-//	ereport(elevel,
-//			(errmsg("\"%s\": scanned %d of %u pages, "
-//					"containing %.0f live rows and %.0f dead rows; "
-//					"%d rows in sample, %.0f estimated total rows",
-//					RelationGetRelationName(onerel),
-//					bs.m, totalblocks,
-//					liverows, deadrows,
-//					numrows, *totalrows)));
 
 	return;
 }
