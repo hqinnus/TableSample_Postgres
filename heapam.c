@@ -6078,13 +6078,19 @@ static void
 acquire_next_sampletup(HeapScanDesc scan, BernoulliSampler bs)
 {
 	HeapTuple		tuple = &(scan->rs_ctup);
+	HeapTuple		pass_tuple;
 
 	if(!scan->rs_sampleinited)
 		acquire_sample_rows(scan, bs);
 
 	if(scan->rs_curindex < scan->rs_samplesize)
 	{
-		tuple = scan->rs_samplerows[scan->rs_curindex++];
+		pass_tuple = heap_copytuple(scan->rs_samplerows[scan->rs_curindex]);
+		tuple->t_len = pass_tuple->t_len;
+		tuple->t_self = pass_tuple->t_self;
+		tuple->t_tableOid = pass_tuple->t_tableOid;
+		tuple->t_data = pass_tuple->t_data;
+		scan->rs_curindex++;
 	}
 	else
 	{
@@ -6102,16 +6108,20 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 {
 	int			numrows = 0;	/* # rows now in reservoir */
 	double		samplerows = 0; /* total # rows collected */
-//	double		liverows = 0;	/* # live rows seen */
-//	double		deadrows = 0;	/* # dead rows seen */
+	double		liverows = 0;	/* # live rows seen */
+	double		deadrows = 0;	/* # dead rows seen */
 	double		rowstoskip = -1;	/* -1 means not set yet */
+	BlockNumber	totalblocks = scan->rs_nblocks;
+	TransactionId OldestXmin;
 	double		rstate;
 	int			targrows = scan->targrows;
-	BlockNumber	totalblocks = scan->rs_nblocks;
 	HeapTuple	*rows = scan->rs_samplerows;
-//	Relation onerel = scan->rs_rd;
+//	Relation relation = scan->rs_rd;
 
 	Assert(targrows > 0);
+
+	/* Need a cutoff xmin for HeapTupleSatisfiesVacuum */
+	OldestXmin = GetOldestXmin(scan->rs_rd->rd_rel->relisshared, true);
 
 	/* Prepare for sampling block numbers */ 
 	BlockSampler_Init(bs, totalblocks, targrows);
@@ -6122,15 +6132,15 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 	while (BlockSampler_HasMore(bs))
 	{
 		BlockNumber targblock = BlockSampler_Next(bs);
-		HeapTuple	tuple = &(scan->rs_ctup);
+//		HeapTuple	tuple = &(scan->rs_ctup);
 		Buffer		targbuffer;
 		Page		targpage;
-//		OffsetNumber targoffset,
-//					maxoffset;
-		int			lines;
-		int			lineindex;
-		int			linesleft;
-		OffsetNumber lineoff;
+		OffsetNumber targoffset,
+					maxoffset;
+//		int			lines;
+//		int			lineindex;
+//		int			linesleft;
+//		OffsetNumber lineoff;
 
 		vacuum_delay_point();
 
@@ -6143,31 +6153,114 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 		 * tuple, but since we aren't doing much work per tuple, the extra
 		 * lock traffic is probably better avoided.
 		 */
-		heapgetpage(scan, targblock);
-//		targbuffer = ReadBufferExtended(onerel, MAIN_FORKNUM, targblock,
-//										RBM_NORMAL, vac_strategy);
-//		LockBuffer(targbuffer, BUFFER_LOCK_SHARE);
-//		targpage = BufferGetPage(targbuffer);
+//		heapgetpage(scan, targblock);
+		targbuffer = ReadBufferExtended(scan->rs_rd, MAIN_FORKNUM, targblock,
+										RBM_NORMAL, scan->rs_strategy);
+		LockBuffer(targbuffer, BUFFER_LOCK_SHARE);
+		targpage = BufferGetPage(targbuffer);
 
-		targpage = BufferGetPage(scan->rs_cbuf);
-//		maxoffset = PageGetMaxOffsetNumber(targpage);
-		lines = scan->rs_ntuples;
-		lineindex = 0;
+//		targpage = BufferGetPage(scan->rs_cbuf);
+		maxoffset = PageGetMaxOffsetNumber(targpage);
+//		lines = scan->rs_ntuples;
+//		lineindex = 0;
 
-		linesleft = lines - lineindex;
+//		linesleft = lines - lineindex;
 
-		while(linesleft > 0)
+		for (targoffset = FirstOffsetNumber; targoffset <= maxoffset; targoffset++)
 		{
-			lineoff = scan->rs_vistuples[lineindex];
-			ItemId itemid = PageGetItemId(targpage, lineoff);
-			Assert(ItemIdIsNormal(itemid));
+//			lineoff = scan->rs_vistuples[lineindex];
+			ItemId itemid; 
+			HeapTupleData targtuple;
+			bool sample_it = false;
+//			Assert(ItemIdIsNormal(itemid));
 
-			tuple->t_data = (HeapTupleHeader) PageGetItem((Page) targpage, itemid);
-			tuple->t_len = ItemIdGetLength(itemid);
-			ItemPointerSet(&(tuple->t_self), targblock, lineoff);
+			itemid = PageGetItemId(targpage, targoffset);
 
-//			if (sample_it)
-//			{
+			//tuple->t_data = (HeapTupleHeader) PageGetItem((Page) targpage, itemid);
+			//tuple->t_len = ItemIdGetLength(itemid);
+			//ItemPointerSet(&(tuple->t_self), targblock, lineoff);
+
+			if (!ItemIdIsNormal(itemid))
+			{
+				if (ItemIdIsDead(itemid))
+					deadrows += 1;
+				continue;
+			}
+
+			ItemPointerSet(&targtuple.t_self, targblock, targoffset);
+
+			targtuple.t_data = (HeapTupleHeader) PageGetItem(targpage, itemid);
+			targtuple.t_len = ItemIdGetLength(itemid);
+
+			switch (HeapTupleSatisfiesVacuum(targtuple.t_data,
+											 OldestXmin,
+											 targbuffer))
+			{
+				case HEAPTUPLE_LIVE:
+					sample_it = true;
+					liverows += 1;
+					break;
+
+				case HEAPTUPLE_DEAD:
+				case HEAPTUPLE_RECENTLY_DEAD:
+					/* Count dead and recently-dead rows */
+					deadrows += 1;
+					break;
+
+				case HEAPTUPLE_INSERT_IN_PROGRESS:
+
+					/*
+					 * Insert-in-progress rows are not counted.  We assume
+					 * that when the inserting transaction commits or aborts,
+					 * it will send a stats message to increment the proper
+					 * count.  This works right only if that transaction ends
+					 * after we finish analyzing the table; if things happen
+					 * in the other order, its stats update will be
+					 * overwritten by ours.  However, the error will be large
+					 * only if the other transaction runs long enough to
+					 * insert many tuples, so assuming it will finish after us
+					 * is the safer option.
+					 *
+					 * A special case is that the inserting transaction might
+					 * be our own.	In this case we should count and sample
+					 * the row, to accommodate users who load a table and
+					 * analyze it in one transaction.  (pgstat_report_analyze
+					 * has to adjust the numbers we send to the stats
+					 * collector to make this come out right.)
+					 */
+					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(targtuple.t_data)))
+					{
+						sample_it = true;
+						liverows += 1;
+					}
+					break;
+
+				case HEAPTUPLE_DELETE_IN_PROGRESS:
+
+					/*
+					 * We count delete-in-progress rows as still live, using
+					 * the same reasoning given above; but we don't bother to
+					 * include them in the sample.
+					 *
+					 * If the delete was done by our own transaction, however,
+					 * we must count the row as dead to make
+					 * pgstat_report_analyze's stats adjustments come out
+					 * right.  (Note: this works out properly when the row was
+					 * both inserted and deleted in our xact.)
+					 */
+					if (TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmax(targtuple.t_data)))
+						deadrows += 1;
+					else
+						liverows += 1;
+					break;
+
+				default:
+					elog(ERROR, "unexpected HeapTupleSatisfiesVacuum result");
+					break;
+			}
+
+			if (sample_it)
+			{
 				/*
 				 * The first targrows sample rows are simply copied into the
 				 * reservoir. Then we start replacing tuples in the sample
@@ -6181,7 +6274,7 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 				 * the relation we're done.
 				 */
 				if (numrows < targrows)
-					rows[numrows++] = heap_copytuple(tuple);
+					rows[numrows++] = heap_copytuple(&targtuple);
 				else
 				{
 					/*
@@ -6204,16 +6297,16 @@ acquire_sample_rows(HeapScanDesc scan, BernoulliSampler bs)
 
 						Assert(k >= 0 && k < targrows);
 						heap_freetuple(rows[k]);
-						rows[k] = heap_copytuple(tuple);
+						rows[k] = heap_copytuple(&targtuple);
 					}
 
 					rowstoskip -= 1;
 				}
 
 				samplerows += 1;
-				--linesleft;
-				++lineindex;
-//			}
+//				--linesleft;
+//				++lineindex;
+			}
 		}
 
 		/* Now release the lock and pin on the page */
