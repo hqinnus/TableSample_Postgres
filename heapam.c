@@ -6108,8 +6108,6 @@ acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs)
 {
 	int			numrows = 0;	/* # rows now in reservoir */
 	double		samplerows = 0; /* total # rows collected */
-	double		liverows = 0;	/* # live rows seen */
-	double		deadrows = 0;	/* # dead rows seen */
 	double		rowstoskip = -1;	/* -1 means not set yet */
 	BlockNumber	totalblocks = scan->rs_nblocks;
 	TransactionId OldestXmin;
@@ -6163,8 +6161,6 @@ acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs)
 
 			if (!ItemIdIsNormal(itemid))
 			{
-				if (ItemIdIsDead(itemid))
-					deadrows += 1;
 				continue;
 			}
 

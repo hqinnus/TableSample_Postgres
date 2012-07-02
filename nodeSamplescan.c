@@ -55,8 +55,6 @@ SampleNext(SampleScanState *node)
 {
 	HeapTuple	tuple;
 	HeapScanDesc scandesc;
-	EState	   *estate;
-	ScanDirection direction;
 	TupleTableSlot *slot;
 	SampleScan *plan_node = (SampleScan *) node->ss.ps.plan;
 	TableSampleMethod sample_method = plan_node->sample_info->sample_method;
@@ -67,8 +65,6 @@ SampleNext(SampleScanState *node)
 	 * get information from the estate and scan state
 	 */
 	scandesc = node->ss.ss_currentScanDesc;
-	estate = node->ss.ps.state;
-	direction = estate->es_direction;
 	slot = node->ss.ss_ScanTupleSlot;
 
 	tuple = heap_getnext_samplescan(scandesc, sample_percent,
@@ -181,6 +177,7 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	TableSampleMethod sample_method = node->sample_info->sample_method;
 	int				  sample_percent = node->sample_info->sample_percent;
 	BernoulliSamplerData bs;
+	int				  seed;
 
 	/*
 	 * We don't expect to have any child plan node
@@ -253,6 +250,12 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	 * There is repeatable support code section from Neil's code
 	 * here. Will add them later.
 	 */
+	seed = (int) time(NULL);
+
+#define RAND_STATE_SIZE 128
+
+	scanstate->rand_state = (char *) palloc(sizeof(char) * RAND_STATE_SIZE);
+	initstate(seed, scanstate->rand_state, RAND_STATE_SIZE);
 
 	return scanstate;
 }
