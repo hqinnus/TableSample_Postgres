@@ -92,7 +92,7 @@ extern void heap_rescan(HeapScanDesc scan, ScanKey key);
 extern void heap_endscan(HeapScanDesc scan);
 extern HeapTuple heap_getnext(HeapScanDesc scan, ScanDirection direction);
 extern HeapTuple heap_getnext_samplescan(HeapScanDesc scan, int sample_percent,
-				 TableSampleMethod sample_method, BernoulliSampler bs);
+				 TableSampleMethod sample_method);
 
 extern bool heap_fetch(Relation relation, Snapshot snapshot,
 		   HeapTuple tuple, Buffer *userbuf, bool keep_buf,

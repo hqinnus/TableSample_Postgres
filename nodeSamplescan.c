@@ -14,9 +14,9 @@
  */
 /*
  * INTERFACE ROUTINES
- *		ExecSampleScan				sequentially scans a relation.
- *		ExecSampleNext				retrieve next tuple in sequential order.
- *		ExecInitSampleScan			creates and initializes a seqscan node.
+ *		ExecSampleScan				randomly scans a relation.
+ *		ExecSampleNext				retrieve next tuple in the order depending on sampling method System/Bernoulli.
+ *		ExecInitSampleScan			creates and initializes a samplescan node.
  *		ExecEndSampleScan			releases any storage allocated.
  *		ExecReScanSampleScan		rescans the relation
  *		ExecSampleMarkPos			marks scan position
@@ -59,7 +59,6 @@ SampleNext(SampleScanState *node)
 	SampleScan *plan_node = (SampleScan *) node->ss.ps.plan;
 	TableSampleMethod sample_method = plan_node->sample_info->sample_method;
 	int				  sample_percent = plan_node->sample_info->sample_percent;
-	BernoulliSampler	  bs = node->bsampler;
 
 	/*
 	 * get information from the estate and scan state
@@ -68,7 +67,7 @@ SampleNext(SampleScanState *node)
 	slot = node->ss.ss_ScanTupleSlot;
 
 	tuple = heap_getnext_samplescan(scandesc, sample_percent,
-								sample_method, bs);
+								sample_method);
 
 	/*              
 	 * save the tuple and the buffer returned to us by the access methods in
@@ -114,25 +113,25 @@ SampleRecheck(SampleScanState *node, TupleTableSlot *slot)
 TupleTableSlot *
 ExecSampleScan(SampleScanState *node)
 {
-	char *prev_state;
+//	char *prev_state;
 	
-	PG_TRY();
-	{
+//	PG_TRY();
+//	{
 		/* Install our PRNG state */
-		prev_state = setstate(node->rand_state);
+//		prev_state = setstate(node->rand_state);
 
 		return ExecScan((ScanState *) node,
 					(ExecScanAccessMtd) SampleNext,
 					(ExecScanRecheckMtd) SampleRecheck);
-	}
-	PG_CATCH();
-	{
-		setstate(prev_state);
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+//	}
+//	PG_CATCH();
+//	{
+//		setstate(prev_state);
+//		PG_RE_THROW();
+//	}
+//	PG_END_TRY();
 
-	setstate(prev_state);
+//	setstate(prev_state);
 }
 
 /* ----------------------------------------------------------------
@@ -176,8 +175,7 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	SampleScanState *scanstate;
 	TableSampleMethod sample_method = node->sample_info->sample_method;
 	int				  sample_percent = node->sample_info->sample_percent;
-	BernoulliSamplerData bs;
-	int				  seed;
+//	int				  seed;
 
 	/*
 	 * We don't expect to have any child plan node
@@ -191,7 +189,6 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	scanstate = makeNode(SampleScanState);
 	scanstate->ss.ps.plan = (Plan *) node;
 	scanstate->ss.ps.state = estate;
-	scanstate->bsampler = &bs;
 
 	/*
 	 * Miscellaneous initialization
@@ -250,12 +247,12 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	 * There is repeatable support code section from Neil's code
 	 * here. Will add them later.
 	 */
-	seed = (int) time(NULL);
+//	seed = (int) time(NULL);
 
-#define RAND_STATE_SIZE 128
+//#define RAND_STATE_SIZE 128
 
-	scanstate->rand_state = (char *) palloc(sizeof(char) * RAND_STATE_SIZE);
-	initstate(seed, scanstate->rand_state, RAND_STATE_SIZE);
+//	scanstate->rand_state = (char *) palloc(sizeof(char) * RAND_STATE_SIZE);
+//	initstate(seed, scanstate->rand_state, RAND_STATE_SIZE);
 
 	return scanstate;
 }

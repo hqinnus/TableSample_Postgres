@@ -92,8 +92,8 @@ static void BlockSampler_Init(BernoulliSampler bs, BlockNumber nblocks,
 				  int samplesize);
 static bool BlockSampler_HasMore(BernoulliSampler bs);
 static BlockNumber BlockSampler_Next(BernoulliSampler bs);
-static void acquire_next_sampletup(HeapScanDesc scan, BernoulliSampler bs);
-static void acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs);
+static void acquire_next_sampletup(HeapScanDesc scan);
+static void acquire_bernoulli_sample(HeapScanDesc scan);
 static double anl_random_fract(void);
 static double anl_init_selection_state(int n);
 static double anl_get_next_S(double t, int n, double *stateptr);
@@ -1530,7 +1530,7 @@ heap_getnext(HeapScanDesc scan, ScanDirection direction)
  * heap_getnext for samplescan, will merge with heap_getnext in the future
  */
 HeapTuple
-heap_getnext_samplescan(HeapScanDesc scan, int sample_percent, TableSampleMethod sample_method, BernoulliSampler bs)
+heap_getnext_samplescan(HeapScanDesc scan, int sample_percent, TableSampleMethod sample_method)
 {
 	/* Note: no locking manipulations needed */
 
@@ -1541,7 +1541,7 @@ heap_getnext_samplescan(HeapScanDesc scan, int sample_percent, TableSampleMethod
 							scan->rs_nkeys, scan->rs_key, sample_percent);
 	else if(sample_method == SAMPLE_BERNOULLI)
 	{
-		acquire_next_sampletup(scan, bs);
+		acquire_next_sampletup(scan);
 	}
 
 	if (scan->rs_ctup.t_data == NULL)
@@ -6075,13 +6075,13 @@ BlockSampler_Next(BernoulliSampler bs)
  * density near the start of the table.
  */
 static void
-acquire_next_sampletup(HeapScanDesc scan, BernoulliSampler bs)
+acquire_next_sampletup(HeapScanDesc scan)
 {
 	HeapTuple		tuple = &(scan->rs_ctup);
 	HeapTuple		pass_tuple;
 
 	if(!scan->rs_sampleinited)
-		acquire_bernoulli_sample(scan, bs);
+		acquire_bernoulli_sample(scan);
 
 	if(scan->rs_curindex < scan->rs_samplesize)
 	{
@@ -6104,7 +6104,7 @@ acquire_next_sampletup(HeapScanDesc scan, BernoulliSampler bs)
 
 
 static void
-acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs)
+acquire_bernoulli_sample(HeapScanDesc scan)
 {
 	int			numrows = 0;	/* # rows now in reservoir */
 	double		samplerows = 0; /* total # rows collected */
@@ -6115,6 +6115,7 @@ acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs)
 	int			targrows = scan->targrows;
 	HeapTuple	*rows = scan->rs_samplerows;
 	Relation onerel = scan->rs_rd;
+	BernoulliSamplerData bs;
 
 	Assert(targrows > 0);
 
@@ -6122,14 +6123,14 @@ acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs)
 	OldestXmin = GetOldestXmin(onerel->rd_rel->relisshared, true);
 
 	/* Prepare for sampling block numbers */ 
-	BlockSampler_Init(bs, totalblocks, targrows);
+	BlockSampler_Init(&bs, totalblocks, targrows);
 	/* Prepare for sampling rows */
 	rstate = anl_init_selection_state(targrows);
 
 	/* Outer loop over blocks to sample */
-	while (BlockSampler_HasMore(bs))
+	while (BlockSampler_HasMore(&bs))
 	{
-		BlockNumber targblock = BlockSampler_Next(bs);
+		BlockNumber targblock = BlockSampler_Next(&bs);
 		Buffer		targbuffer;
 		Page		targpage;
 		OffsetNumber targoffset,
@@ -6155,7 +6156,6 @@ acquire_bernoulli_sample(HeapScanDesc scan, BernoulliSampler bs)
 		{
 			ItemId itemid; 
 			HeapTupleData targtuple;
-			bool sample_it = false;
 
 			itemid = PageGetItemId(targpage, targoffset);
 
