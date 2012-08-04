@@ -77,6 +77,8 @@ typedef struct TableSampleInfo
 	NodeTag				type;
 	int					sample_percent;
 	TableSampleMethod	sample_method;
+	bool				is_repeatable;
+	int					repeat_seed;
 } TableSampleInfo;
 
 /*

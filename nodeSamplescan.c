@@ -113,25 +113,25 @@ SampleRecheck(SampleScanState *node, TupleTableSlot *slot)
 TupleTableSlot *
 ExecSampleScan(SampleScanState *node)
 {
-//	char *prev_state;
+	char *prev_state;
 	
-//	PG_TRY();
-//	{
+	PG_TRY();
+	{
 		/* Install our PRNG state */
-//		prev_state = setstate(node->rand_state);
+		prev_state = setstate(node->rand_state);
 
 		return ExecScan((ScanState *) node,
 					(ExecScanAccessMtd) SampleNext,
 					(ExecScanRecheckMtd) SampleRecheck);
-//	}
-//	PG_CATCH();
-//	{
-//		setstate(prev_state);
-//		PG_RE_THROW();
-//	}
-//	PG_END_TRY();
+	}
+	PG_CATCH();
+	{
+		setstate(prev_state);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 
-//	setstate(prev_state);
+	setstate(prev_state);
 }
 
 /* ----------------------------------------------------------------
@@ -175,7 +175,7 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	SampleScanState *scanstate;
 	TableSampleMethod sample_method = node->sample_info->sample_method;
 	int				  sample_percent = node->sample_info->sample_percent;
-//	int				  seed;
+	int				  seed;
 
 	/*
 	 * We don't expect to have any child plan node
@@ -244,15 +244,23 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
 	}
 
 	/*
-	 * There is repeatable support code section from Neil's code
-	 * here. Will add them later.
+	 * Setup PRNG state; seed with the REPEATABLE clause, if any. We
+	 * can't just use srandom(), since there could be multiple
+	 * concurrent sample scans.
+	 *
+	 * XXX: using time() to seed the PRNG in the non-repeatable case
+	 * could probably be improved. Different state array sizes could
+	 * also be tried: do we need high-quality random numbers?
 	 */
-//	seed = (int) time(NULL);
+	if(node->sample_info->is_repeatable)
+		seed = node->sample_info->repeat_seed;
+	else
+		seed = (int) time(NULL);
 
-//#define RAND_STATE_SIZE 128
+#define RAND_STATE_SIZE 128
 
-//	scanstate->rand_state = (char *) palloc(sizeof(char) * RAND_STATE_SIZE);
-//	initstate(seed, scanstate->rand_state, RAND_STATE_SIZE);
+	scanstate->rand_state = (char *) palloc(sizeof(char) * RAND_STATE_SIZE);
+	initstate(seed, scanstate->rand_state, RAND_STATE_SIZE);
 
 	return scanstate;
 }
@@ -261,6 +269,7 @@ ExecInitSampleScan(SampleScan *node, EState *estate, int eflags)
  *						Join Support
  * To understand this part more, read at 
  * 1. execAmi.c, ExecSupportsMarkRestore
+ * 2. The below part is still seqscan code, not changed yet.
  * ----------------------------------------------------------------
  */
 

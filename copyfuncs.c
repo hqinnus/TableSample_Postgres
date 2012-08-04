@@ -1826,7 +1826,6 @@ _copyFromExpr(const FromExpr *from)
 
 /*
  * _CopyTableSampleInfo
- * Incomlete yet, without the sampling method and repeat seed support.
  */
 static TableSampleInfo *
 _copyTableSampleInfo(const TableSampleInfo *from)
@@ -1835,6 +1834,8 @@ _copyTableSampleInfo(const TableSampleInfo *from)
 
 	COPY_SCALAR_FIELD(sample_percent);
 	COPY_SCALAR_FIELD(sample_method);
+	COPY_SCALAR_FIELD(is_repeatable);
+	COPY_SCALAR_FIELD(repeat_seed);
 
 	return newnode;
 }

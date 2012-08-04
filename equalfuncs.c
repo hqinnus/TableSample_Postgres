@@ -786,6 +786,8 @@ _equalTableSampleInfo(TableSampleInfo *a, TableSampleInfo *b)
 {
 	COMPARE_SCALAR_FIELD(sample_percent);
 	COMPARE_SCALAR_FIELD(sample_method);
+	COMPARE_SCALAR_FIELD(is_repeatable);
+	COMPARE_SCALAR_FIELD(repeat_seed);
 
 	return true;
 }

@@ -397,6 +397,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <node>	opt_table_sample
 %type <range>	relation_expr_opt_sample
 %type <value>	sample_method
+%type <value>	opt_repeatable_clause
 %type <range>	relation_expr
 %type <range>	relation_expr_opt_alias
 %type <target>	target_el single_set_clause set_target insert_column_item
@@ -9432,7 +9433,7 @@ relation_expr_opt_sample:
 		;
 
 opt_table_sample:
-			TABLESAMPLE sample_method '('Iconst')'
+			TABLESAMPLE sample_method '('Iconst')' opt_repeatable_clause
 			{
 				TableSampleInfo *n = makeNode(TableSampleInfo);
 
@@ -9457,6 +9458,12 @@ opt_table_sample:
 							 errmsg("TABLESAMPLE percentage must"
 									"be greater than 0")));
 
+				if($6 != NULL)
+				{
+					n->is_repeatable = true;
+					n->repeat_seed = intVal($6);
+				}
+
 				$$ = (Node *)n;
 			}
 			| /*EMPTY*/				{ $$ = NULL; }
@@ -9465,6 +9472,12 @@ opt_table_sample:
 sample_method:
 			BERNOULLI				{ $$ = 1; }
 			| SYSTEM_P 				{ $$ = 2; }
+		;
+
+opt_repeatable_clause:
+			REPEATABLE '('Iconst')' { $$ = makeInteger($3); }
+			| /*EMPTY*/				{ $$ = NULL; }
+		;
 
 relation_expr:
 			qualified_name
@@ -12428,7 +12441,6 @@ unreserved_keyword:
 			| RELATIVE_P
 			| RELEASE
 			| RENAME
-			| REPEATABLE
 			| REPLACE
 			| REPLICA
 			| RESET
@@ -12669,6 +12681,7 @@ reserved_keyword:
 			| PLACING
 			| PRIMARY
 			| REFERENCES
+			| REPEATABLE
 			| RETURNING
 			| SELECT
 			| SESSION_USER

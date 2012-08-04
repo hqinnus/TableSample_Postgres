@@ -392,6 +392,8 @@ _readTableSampleInfo(void)
 
 	READ_INT_FIELD(sample_percent);
 	READ_ENUM_FIELD(sample_method, TableSampleMethod);
+	READ_BOOL_FIELD(is_repeatable);
+	READ_INT_FIELD(repeat_seed);
 
 	READ_DONE();
 }

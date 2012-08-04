@@ -2392,6 +2392,8 @@ _outTableSampleInfo(StringInfo str, TableSampleInfo *node)
 
 	WRITE_INT_FIELD(sample_percent);
 	WRITE_ENUM_FIELD(sample_method, TableSampleMethod);
+	WRITE_INT_FIELD(repeat_seed);
+	WRITE_BOOL_FIELD(is_repeatable);
 }
 
 static void

@@ -1439,8 +1439,8 @@ typedef struct SampleScanState
 	/* parent class; first field is NodeTag */
 	ScanState			 ss;
 	BernoulliSampler		 bsampler;
-	char				 *rand_state;
-	char				 *prev_rand_state;
+	char			 *rand_state;
+	char			 *prev_rand_state;
 } SampleScanState;
 
 
